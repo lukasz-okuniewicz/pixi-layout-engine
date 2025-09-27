@@ -1,0 +1,61 @@
+{
+  "name": "pixi-layout-engine",
+  "version": "1.0.0",
+  "description": "A powerful, pixi.js layout engine for arranging objects in 2D space. Provides 20+ advanced layouts like grids, circles, spirals, masonry, treemaps, and more. Ideal for game development, data visualization, and complex UI.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lukasz-okuniewicz/pixi-layout-engine.git"
+  },
+  "keywords": [
+    "pixi",
+    "pixi.js",
+    "layout",
+    "engine",
+    "grid",
+    "circle",
+    "2d",
+    "positioning",
+    "component",
+    "arrange",
+    "pixijs",
+    "phaser",
+    "canvas",
+    "gamedev"
+  ],
+  "author": "Lukasz Okuniewicz <npm@okuniewicz.eu> (https://github.com/lukasz-okuniewicz)",
+  "license": "GNU",
+  "bugs": {
+    "url": "https://github.com/lukasz-okuniewicz/pixi-layout-engine/issues"
+  },
+  "homepage": "https://github.com/lukasz-okuniewicz/pixi-layout-engine#readme",
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "pixi.js": "^8.1.3",
+    "prettier": "^3.6.2",
+    "typescript": "^5.4.5"
+  },
+  "peerDependencies": {
+    "pixi.js": "^7.0.0 || ^8.0.0"
+  }
+}
