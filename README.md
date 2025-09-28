@@ -56,6 +56,57 @@ applyLayout(container, {
 });
 ```
 
+## 📱 Responsive Layouts
+
+You can easily define different layout options for `portrait` and `landscape` orientations. The engine will automatically merge the correct configuration for you.
+
+This is handled by three new properties in the options object:
+
+-   `orientation` (`"portrait"` | `"landscape"`) – The current device orientation. This tells the layout engine which set of overrides to apply.
+-   `portrait` (object) – An object containing any layout options that should **override** the base settings when `orientation` is `"portrait"`.
+-   `landscape` (object) – An object containing any layout options that should **override** the base settings when `orientation` is `"landscape"`.
+
+### Responsive Usage Example
+
+```js
+import { applyLayout, layoutEnum } from "pixi-layout-engine";
+
+// 1. Define a single layout object with responsive overrides
+const responsiveGridLayout = {
+  // Base options shared by both orientations
+  layoutName: layoutEnum.SQUARE,
+  spacing: 15,
+
+  // Options for portrait mode
+  portrait: {
+    columns: 4,
+    flowDirection: "default",
+  },
+
+  // Options for landscape mode
+  landscape: {
+    columns: 8,
+    flowDirection: "snake",
+  },
+};
+
+// 2. In your application logic, detect the current orientation
+function updateLayout() {
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const currentOrientation = isPortrait ? 'portrait' : 'landscape';
+
+  // 3. Apply the layout, passing the current orientation
+  applyLayout(container, {
+    ...responsiveGridLayout,
+    orientation: currentOrientation,
+  });
+}
+
+// Call it on load and on resize
+window.addEventListener('resize', updateLayout);
+updateLayout(); // Initial call
+```
+
 ---
 
 ## 🗂️ Layout Types
@@ -129,7 +180,7 @@ These options are used by many different layouts.
 
 ### Specific Layout Options
 - **Line Layout**
-  - `angle` (number) – The master orientation control in degrees. 0 is horizontal, 90 is vertical. Defaults to 0.
+  - `angle` (number) – The angle of the line in degrees. 0 is horizontal, 90 is vertical.
   - `spacing` (number) – The gap between items along the line.
   - `isReversed` (boolean) – Reverses the order of components along the line.
   - `alignItems` (`"start"` | `"center"` | `"end"`) – Cross-axis alignment of items relative to the line's angle.
@@ -196,6 +247,7 @@ These options are used by many different layouts.
 - **Square/Grid Layout**
   - `columns` (number) – The number of columns in the grid.
   - `useGridSpanning` (boolean) – If true, enables the advanced algorithm that respects `colSpan` and `rowSpan` on components. Most complex flow directions do not apply in this mode.
+  - `honeycombOrientation` (`"pointy-top"` | `"flat-top"`) – For `flowDirection: 'honeycomb'`, controls whether the hexagons are oriented with a point or a flat side on top. Defaults to `pointy-top`.
   - `flowDirection` (string) – Determines the visual pattern used to fill the grid. This is the most powerful option, accepting dozens of values, including:
     - **Standard & Corner-Based:** `default`, `snake`, `column`, `column-snake`, `honeycomb`, `bottom-start`, `right-start`, etc.
     - **Algorithmic:** `spiral-out`, `spiral-in`, `hilbert-curve`, `z-order`, `diagonal-fill`.

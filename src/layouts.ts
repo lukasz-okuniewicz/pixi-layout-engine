@@ -7,13 +7,27 @@ import type {Bounds, LayoutComponent, LayoutContainer, LayoutOptions} from "./ty
  This function acts as a router, selecting the appropriate layout algorithm based on
  the layoutName in the options. After the components' positions are calculated,
  it centers the entire layout within the container by adjusting the container's position.
+
+ It also supports responsive configurations by accepting `orientation`, `portrait`, and `landscape`
+ properties in the options object. The appropriate configuration will be automatically merged.
+
  @param {LayoutContainer} container - The container object. Its `children` will be laid out, and its `position` property will be modified to center the final layout.
- @param {LayoutOptions} [options={}] - Configuration for the layout. Includes layoutName to select the layout type and other properties specific to that layout (e.g., spacing, radius).
+ @param {LayoutOptions} [options={}] - Configuration for the layout. Includes layoutName, orientation-specific overrides, and other properties specific to that layout (e.g., spacing, radius).
  */
 const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): void => {
-    const components: LayoutComponent[] = container.children
-    const layoutName = options.layoutName || layoutEnum.SQUARE;
+    const { orientation, portrait, landscape, ...baseOptions } = options;
+    let finalOptions: Omit<LayoutOptions, 'orientation' | 'portrait' | 'landscape'> = baseOptions;
+
+    if (orientation === 'portrait' && portrait) {
+        finalOptions = { ...finalOptions, ...portrait };
+    } else if (orientation === 'landscape' && landscape) {
+        finalOptions = { ...finalOptions, ...landscape };
+    }
+
+    const components: LayoutComponent[] = container.children;
+    const layoutName = finalOptions.layoutName || layoutEnum.SQUARE;
     container.position.set(0, 0);
+
     const layouts: Record<string, (c: LayoutComponent[], o: LayoutOptions) => Bounds> = {
         [layoutEnum.LINE]: _layoutLine,
         [layoutEnum.CIRCLE]: _layoutCircle,
@@ -40,10 +54,10 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
     };
     let bounds: Bounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     if (layouts[layoutName]) {
-        bounds = layouts[layoutName](components, options);
+        bounds = layouts[layoutName](components, finalOptions);
     } else {
         console.warn(`Layout "${layoutName}" not found. Defaulting to horizontal.`);
-        bounds = _layoutLine(components, { ...options, isVertical: false });
+        bounds = _layoutLine(components, { ...finalOptions, isVertical: false });
     }
     const layoutWidth = bounds.maxX - bounds.minX;
     const layoutHeight = bounds.maxY - bounds.minY;
@@ -728,7 +742,7 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
         lastRowAlign = "start",
         alignItems = 'start',
         justifyItems = 'start',
-        orientation = 'pointy-top'
+        honeycombOrientation = 'pointy-top'
     } = options;
     if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
@@ -739,7 +753,7 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
 
     let hexWidth = 0, hexHeight = 0, xStep = 0, yStep = 0;
     if (isHoneycombFlow) {
-        if (orientation === 'pointy-top') {
+        if (honeycombOrientation === 'pointy-top') {
             const requiredWidthFromHeight = maxChildHeight * (2 / Math.sqrt(3));
             hexWidth = Math.max(maxChildWidth, requiredWidthFromHeight);
             hexHeight = hexWidth * (Math.sqrt(3) / 2);
@@ -796,7 +810,7 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
         let cellY: number;
 
         if (isHoneycombFlow) {
-            if (orientation === 'pointy-top') {
+            if (honeycombOrientation === 'pointy-top') {
                 cellX = finalCol * xStep;
                 cellY = finalRow * yStep + (finalCol % 2 === 1 ? yStep / 2 : 0);
             } else {

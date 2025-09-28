@@ -2,6 +2,8 @@ import type {layoutEnum} from './layoutEnum.js';
 
 export type LayoutName = typeof layoutEnum[keyof typeof layoutEnum];
 
+export type Orientation = 'portrait' | 'landscape';
+
 export interface Zone {
     name: string;
     bounds: { x: number, y: number, width: number, height: number };
@@ -136,7 +138,7 @@ export interface LayoutOptions {
     path?: string;
     pathParser?: any;
     rotateToPath?: boolean;
-    orientation?: 'pointy-top' | 'flat-top';
+    honeycombOrientation?: 'pointy-top' | 'flat-top';
     vanishingPoint?: { x: number, y: number };
     depthSpacing?: number;
     tileWidth?: number;
@@ -182,4 +184,7 @@ export interface LayoutOptions {
     braidRows?: number;
     blockWidth?: number;
     blockHeight?: number;
+    orientation?: Orientation;
+    portrait?: Partial<Omit<LayoutOptions, 'portrait' | 'landscape'>>;
+    landscape?: Partial<Omit<LayoutOptions, 'portrait' | 'landscape'>>;
 }
