@@ -15,7 +15,7 @@ If you find **pixi-layout-engine** useful and would like to support my work, you
 ---
 
 ## 🎮 Demo
-Try it out here: [pixi-layout-engine Live Editor](https://lukasz-okuniewicz.github.io/pixi-layout-engine-testbed/)
+Try it out here: [pixi-layout-engine Live Editor](https://lukasz-okuniewicz.github.io/pixi-layout-engine-ui/)
 
 ---
 
