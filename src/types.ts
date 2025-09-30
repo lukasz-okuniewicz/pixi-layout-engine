@@ -61,6 +61,11 @@ export interface LayoutContainer {
         y: number;
         set(x: number, y: number): void;
     };
+    pivot: {
+        x: number;
+        y: number;
+        set(x: number, y: number): void;
+    };
     children: LayoutComponent[];
 }
 

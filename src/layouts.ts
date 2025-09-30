@@ -26,7 +26,7 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
 
     const components: LayoutComponent[] = container.children;
     const layoutName = finalOptions.layoutName || layoutEnum.SQUARE;
-    container.position.set(0, 0);
+    container.pivot.set(0, 0);
 
     const layouts: Record<string, (c: LayoutComponent[], o: LayoutOptions) => Bounds> = {
         [layoutEnum.LINE]: _layoutLine,
@@ -61,8 +61,8 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
     }
     const layoutWidth = bounds.maxX - bounds.minX;
     const layoutHeight = bounds.maxY - bounds.minY;
-    container.position.x = -(bounds.minX + layoutWidth / 2);
-    container.position.y = -(bounds.minY + layoutHeight / 2);
+    container.pivot.x = (bounds.minX + layoutWidth / 2);
+    container.pivot.y = (bounds.minY + layoutHeight / 2);
 };
 
 /**
@@ -84,6 +84,9 @@ const _layoutLine = (components: LayoutComponent[], options: LayoutOptions): Bou
         spacing = 0,
         alignItems = 'start',
         isReversed: optionReversed = false,
+        sizingMode,
+        fixedWidth,
+        fixedHeight,
     } = options;
 
     const angleRadians = angle * (Math.PI / 180);
@@ -103,8 +106,12 @@ const _layoutLine = (components: LayoutComponent[], options: LayoutOptions): Bou
     let maxCrossDim = 0;
 
     const componentDims = componentOrder.map(child => {
-        const mainDim = (child.width * cosAngleAbs) + (child.height * sinAngleAbs);
-        const crossDim = (child.height * cosAngleAbs) + (child.width * sinAngleAbs);
+        const useFixed = sizingMode === 'fixed';
+        const layoutWidth = useFixed && typeof fixedWidth === 'number' ? fixedWidth : child.width;
+        const layoutHeight = useFixed && typeof fixedHeight === 'number' ? fixedHeight : child.height;
+        const mainDim = (layoutWidth * cosAngleAbs) + (layoutHeight * sinAngleAbs);
+        const crossDim = (layoutHeight * cosAngleAbs) + (layoutWidth * sinAngleAbs);
+
         if (crossDim > maxCrossDim) maxCrossDim = crossDim;
         return { mainDim, crossDim };
     });
@@ -2102,7 +2109,7 @@ const _layoutSpreadExplosion = (components: LayoutComponent[], options: LayoutOp
  * The number of items per row is defined by the `tiers` array.
  * @private
  * @param {LayoutComponent[]} components - The components to arrange.
- * @param {LayoutOptions} [options={}] - Layout config. Uses `tiers`, `rowGap`, `itemSpacing`, and alignment.
+ * @param {LayoutOptions} [options={}] - Layout config. Uses `tiers`, `rowGap`, `itemSpacing`, and now `sizingMode`.
  * @returns {Bounds} The calculated bounds of the layout.
  */
 const _layoutPyramid = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
@@ -2114,7 +2121,9 @@ const _layoutPyramid = (components: LayoutComponent[], options: LayoutOptions = 
         direction = 'up',
         tierAlignment = 'center',
         staggerOffset = 0,
-        useActualSize = false,
+        sizingMode,
+        fixedWidth,
+        fixedHeight,
         justifyTierContent = 'center',
         sortBy = null,
         sortDirection = 'asc',
@@ -2123,6 +2132,8 @@ const _layoutPyramid = (components: LayoutComponent[], options: LayoutOptions = 
     if (components.length === 0 || tiers.length === 0) {
         return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     }
+
+    const useActualSize = sizingMode !== 'fixed';
 
     let componentsToLayout = [...components];
     if (sortBy) {
@@ -2145,9 +2156,15 @@ const _layoutPyramid = (components: LayoutComponent[], options: LayoutOptions = 
 
     let maxItemMain = 0;
     let maxItemCross = 0;
-    for (const child of componentsToLayout) {
-        if (child[mainDim] > maxItemMain) maxItemMain = child[mainDim];
-        if (child[crossDim] > maxItemCross) maxItemCross = child[crossDim];
+
+    if (useActualSize) {
+        for (const child of componentsToLayout) {
+            if (child[mainDim] > maxItemMain) maxItemMain = child[mainDim];
+            if (child[crossDim] > maxItemCross) maxItemCross = child[crossDim];
+        }
+    } else {
+        maxItemMain = (isVertical ? fixedHeight : fixedWidth) ?? 0;
+        maxItemCross = (isVertical ? fixedWidth : fixedHeight) ?? 0;
     }
 
     let componentIndex = 0;
