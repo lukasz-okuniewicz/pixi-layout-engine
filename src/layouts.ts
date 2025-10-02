@@ -801,6 +801,10 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
     }
 
     components.forEach((child, i) => {
+        const useFixed = options.sizingMode === 'fixed';
+        const childWidth = useFixed ? (options.fixedWidth ?? 0) : child.width;
+        const childHeight = useFixed ? (options.fixedHeight ?? 0) : child.height;
+
         let baseRow: number, baseCol: number;
 
         if (isColumnFlow) {
@@ -842,15 +846,15 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
 
         let childCenterX: number;
         switch (justifyItems) {
-            case 'end': childCenterX = cellX + maxChildWidth - child.width / 2; break;
+            case 'end': childCenterX = cellX + maxChildWidth - childWidth / 2; break;
             case 'center': childCenterX = cellX + maxChildWidth / 2; break;
-            case 'start': default: childCenterX = cellX + child.width / 2; break;
+            case 'start': default: childCenterX = cellX + childWidth / 2; break;
         }
         let childCenterY: number;
         switch (alignItems) {
-            case 'end': childCenterY = cellY + maxChildHeight - child.height / 2; break;
+            case 'end': childCenterY = cellY + maxChildHeight - childHeight / 2; break;
             case 'center': childCenterY = cellY + maxChildHeight / 2; break;
-            case 'start': default: childCenterY = cellY + child.height / 2; break;
+            case 'start': default: childCenterY = cellY + childHeight / 2; break;
         }
         child.position.set(childCenterX, childCenterY);
     });
@@ -983,6 +987,10 @@ const _layoutSquareWithSpanning = (components: LayoutComponent[], options: Layou
     let maxRowUsed = 0;
 
     for (const child of components) {
+        const useFixed = options.sizingMode === 'fixed';
+        const childWidth = useFixed ? (options.fixedWidth ?? 0) : child.width;
+        const childHeight = useFixed ? (options.fixedHeight ?? 0) : child.height;
+
         const colSpan = Math.min(child.colSpan || 1, columns);
         const rowSpan = child.rowSpan || 1;
         let foundPosition = false;
@@ -1018,15 +1026,15 @@ const _layoutSquareWithSpanning = (components: LayoutComponent[], options: Layou
 
                     let childCenterX: number;
                     switch (justifyItems) {
-                        case 'end': childCenterX = cellX + spannedWidth - child.width / 2; break;
+                        case 'end': childCenterX = cellX + spannedWidth - childWidth / 2; break;
                         case 'center': childCenterX = cellX + spannedWidth / 2; break;
-                        case 'start': default: childCenterX = cellX + child.width / 2; break;
+                        case 'start': default: childCenterX = cellX + childWidth / 2; break;
                     }
                     let childCenterY: number;
                     switch (alignItems) {
-                        case 'end': childCenterY = cellY + spannedHeight - child.height / 2; break;
+                        case 'end': childCenterY = cellY + spannedHeight - childHeight / 2; break;
                         case 'center': childCenterY = cellY + spannedHeight / 2; break;
-                        case 'start': default: childCenterY = cellY + child.height / 2; break;
+                        case 'start': default: childCenterY = cellY + childHeight / 2; break;
                     }
                     child.position.set(childCenterX, childCenterY);
 
