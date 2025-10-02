@@ -136,23 +136,33 @@ const _layoutLine = (components: LayoutComponent[], options: LayoutOptions): Bou
         currentMainPos += mainDim + spacing;
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
  Calculates the bounding box that encloses a set of positioned components.
+ This version is aware of `sizingMode` to work correctly on non-rendered objects.
  @private
  @param {LayoutComponent[]} components - The array of components that have already been positioned.
+ @param {LayoutOptions} options - The layout options, used to check for fixed sizing.
  @returns {Bounds} An object representing the bounding box (minX, minY, maxX, maxY).
  */
-const _calculateBoundsFromComponents = (components: LayoutComponent[]): Bounds => {
+const _calculateBoundsFromComponents = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
     if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
+    const useFixed = options.sizingMode === 'fixed';
+    const fixedWidth = options.fixedWidth ?? 0;
+    const fixedHeight = options.fixedHeight ?? 0;
+
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const child of components) {
-        minX = Math.min(minX, child.position.x - child.width / 2);
-        minY = Math.min(minY, child.position.y - child.height / 2);
-        maxX = Math.max(maxX, child.position.x + child.width / 2);
-        maxY = Math.max(maxY, child.position.y + child.height / 2);
+        const childWidth = useFixed ? fixedWidth : child.width;
+        const childHeight = useFixed ? fixedHeight : child.height;
+
+        minX = Math.min(minX, child.position.x - childWidth / 2);
+        minY = Math.min(minY, child.position.y - childHeight / 2);
+        maxX = Math.max(maxX, child.position.x + childWidth / 2);
+        maxY = Math.max(maxY, child.position.y + childHeight / 2);
     }
     return { minX, minY, maxX, maxY };
 };
@@ -284,7 +294,7 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
         }
     });
 
-    return _calculateBoundsFromComponents(componentsToLayout);
+    return _calculateBoundsFromComponents(componentsToLayout, options);
 };
 
 /**
@@ -846,7 +856,7 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
     });
 
     if (isHoneycombFlow) {
-        return _calculateBoundsFromComponents(components);
+        return _calculateBoundsFromComponents(components, options);
     } else {
         const totalHeight = totalRows * cellHeight - rowGap;
         return { minX: 0, minY: 0, maxX: gridWidth, maxY: totalHeight };
@@ -1355,7 +1365,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         }
     }
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1379,7 +1389,7 @@ const _layoutSpiral = (components: LayoutComponent[], options: LayoutOptions = {
         angle += tightness;
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1468,7 +1478,7 @@ const _layoutPhyllotaxis = (components: LayoutComponent[], options: LayoutOption
         const y = radius * Math.sin(theta);
         child.position.set(x, y);
     });
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1508,7 +1518,7 @@ const _layoutPath = (components: LayoutComponent[], options: LayoutOptions = {})
         console.error('Error using the provided pathParser:', e);
         return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     }
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1550,7 +1560,7 @@ const _layoutPerspective = (components: LayoutComponent[], options: LayoutOption
         }
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1574,7 +1584,7 @@ const _layoutIsometric = (components: LayoutComponent[], options: LayoutOptions 
         child.position.set(screenX, screenY);
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1719,7 +1729,7 @@ const _layoutBubble = (components: LayoutComponent[], options: LayoutOptions = {
         n.component.height = n.radius * 2;
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1825,7 +1835,7 @@ const _layoutWordCloud = (components: LayoutComponent[], options: LayoutOptions 
         placed.push(child);
     });
 
-    return _calculateBoundsFromComponents(placed);
+    return _calculateBoundsFromComponents(placed, options);
 };
 
 /**
@@ -1908,7 +1918,7 @@ const _layoutCirclePack = (components: LayoutComponent[], options: LayoutOptions
         n.component.height = n.radius * 2;
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1957,7 +1967,7 @@ const _layoutCardHand = (components: LayoutComponent[], options: LayoutOptions =
         }
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -1991,7 +2001,7 @@ const _layoutStack = (components: LayoutComponent[], options: LayoutOptions = {}
         }
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
@@ -2101,7 +2111,7 @@ const _layoutSpreadExplosion = (components: LayoutComponent[], options: LayoutOp
         }
     });
 
-    return _calculateBoundsFromComponents(components);
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**
