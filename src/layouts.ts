@@ -15,8 +15,8 @@ import type {Bounds, LayoutComponent, LayoutContainer, LayoutOptions} from "./ty
  @param {LayoutOptions} [options={}] - Configuration for the layout. Includes layoutName, orientation-specific overrides, and other properties specific to that layout (e.g., spacing, radius).
  */
 const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): void => {
-    const { orientation, portrait, landscape, ...baseOptions } = options;
-    let finalOptions: Omit<LayoutOptions, 'orientation' | 'portrait' | 'landscape'> = baseOptions;
+    const { orientation, portrait, landscape, sortBy, ...baseOptions } = options;
+    let finalOptions: Omit<LayoutOptions, 'orientation' | 'portrait' | 'landscape' | 'sortBy'> = baseOptions;
 
     if (orientation === 'portrait' && portrait) {
         finalOptions = { ...finalOptions, ...portrait };
@@ -24,7 +24,28 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
         finalOptions = { ...finalOptions, ...landscape };
     }
 
-    const components: LayoutComponent[] = container.children;
+    let componentsToLayout: LayoutComponent[] = [...container.children]; // Create a mutable copy
+
+    if (sortBy) {
+        if (typeof sortBy === 'string') {
+            componentsToLayout.sort((a, b) => {
+                const valA = (a as any)[sortBy];
+                const valB = (b as any)[sortBy];
+
+                if (valA === undefined || valB === undefined) {
+                    console.warn(`sortBy key "${sortBy}" not found on all components.`);
+                    return 0;
+                }
+
+                if (valA < valB) return -1;
+                if (valA > valB) return 1;
+                return 0;
+            });
+        } else if (typeof sortBy === 'function') {
+            componentsToLayout.sort(sortBy);
+        }
+    }
+
     const layoutName = finalOptions.layoutName || layoutEnum.SQUARE;
     container.pivot.set(0, 0);
 
@@ -52,12 +73,13 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
         [layoutEnum.SPREAD_EXPLOSION]: _layoutSpreadExplosion,
         [layoutEnum.PYRAMID]: _layoutPyramid,
     };
+
     let bounds: Bounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     if (layouts[layoutName]) {
-        bounds = layouts[layoutName](components, finalOptions);
+        bounds = layouts[layoutName](componentsToLayout, finalOptions);
     } else {
         console.warn(`Layout "${layoutName}" not found. Defaulting to horizontal.`);
-        bounds = _layoutLine(components, { ...finalOptions, isVertical: false });
+        bounds = _layoutLine(componentsToLayout, { ...finalOptions, isVertical: false });
     }
     const layoutWidth = bounds.maxX - bounds.minX;
     const layoutHeight = bounds.maxY - bounds.minY;
