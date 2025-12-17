@@ -24,7 +24,7 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
         finalOptions = { ...finalOptions, ...landscape };
     }
 
-    let componentsToLayout: LayoutComponent[] = [...container.children]; // Create a mutable copy
+    let componentsToLayout: LayoutComponent[] = [...container.children];
 
     if (sortBy) {
         if (typeof sortBy === 'string') {
@@ -781,8 +781,10 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
         lastRowAlign = "start",
         alignItems = 'start',
         justifyItems = 'start',
-        honeycombOrientation = 'pointy-top'
-    } = options;
+        honeycombOrientation = 'pointy-top',
+        cornerOffset = 0
+    } = options as any;
+
     if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
     const { cellWidth, cellHeight, maxChildWidth, maxChildHeight, columnGap, rowGap } = _calculateGridCellSize(components, options);
@@ -878,6 +880,28 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
             case 'center': childCenterY = cellY + maxChildHeight / 2; break;
             case 'start': default: childCenterY = cellY + childHeight / 2; break;
         }
+
+        if (cornerOffset !== 0) {
+            const isTop = finalRow === 0;
+            const isBottom = finalRow === totalRows - 1;
+            const isLeft = finalCol === 0;
+            const isRight = finalCol === columns - 1;
+
+            if (isTop && isLeft) {
+                childCenterX -= cornerOffset;
+                childCenterY -= cornerOffset;
+            } else if (isTop && isRight) {
+                childCenterX += cornerOffset;
+                childCenterY -= cornerOffset;
+            } else if (isBottom && isLeft) {
+                childCenterX -= cornerOffset;
+                childCenterY += cornerOffset;
+            } else if (isBottom && isRight) {
+                childCenterX += cornerOffset;
+                childCenterY += cornerOffset;
+            }
+        }
+
         child.position.set(childCenterX, childCenterY);
     });
 
@@ -885,6 +909,9 @@ const _layoutSquareSimple = (components: LayoutComponent[], options: LayoutOptio
         return _calculateBoundsFromComponents(components, options);
     } else {
         const totalHeight = totalRows * cellHeight - rowGap;
+        if (cornerOffset > 0) {
+            return { minX: -cornerOffset, minY: -cornerOffset, maxX: gridWidth + cornerOffset, maxY: totalHeight + cornerOffset };
+        }
         return { minX: 0, minY: 0, maxX: gridWidth, maxY: totalHeight };
     }
 };
@@ -1000,13 +1027,26 @@ const _layoutSquareWithSpanning = (components: LayoutComponent[], options: Layou
         columns = 3,
         flowDirection = "default",
         alignItems = 'start',
-        justifyItems = 'start'
-    } = options;
+        justifyItems = 'start',
+        cornerOffset = 0
+    } = options as any;
+
     if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
     const { cellWidth, cellHeight, columnGap, rowGap } = _calculateGridCellSize(components, options);
     const occupancyGrid: boolean[][] = [];
     let maxRowUsed = 0;
+
+    type PlacedItem = {
+        component: LayoutComponent;
+        row: number;
+        col: number;
+        rowSpan: number;
+        colSpan: number;
+        childWidth: number;
+        childHeight: number;
+    };
+    const placedItems: PlacedItem[] = [];
 
     for (const child of components) {
         const useFixed = options.sizingMode === 'fixed';
@@ -1041,30 +1081,21 @@ const _layoutSquareWithSpanning = (components: LayoutComponent[], options: Layou
                 }
 
                 if (canFit) {
-                    const spannedWidth = colSpan * cellWidth - columnGap;
-                    const spannedHeight = rowSpan * cellHeight - rowGap;
-                    const cellX = c * cellWidth;
-                    const cellY = searchRow * cellHeight;
-
-                    let childCenterX: number;
-                    switch (justifyItems) {
-                        case 'end': childCenterX = cellX + spannedWidth - childWidth / 2; break;
-                        case 'center': childCenterX = cellX + spannedWidth / 2; break;
-                        case 'start': default: childCenterX = cellX + childWidth / 2; break;
-                    }
-                    let childCenterY: number;
-                    switch (alignItems) {
-                        case 'end': childCenterY = cellY + spannedHeight - childHeight / 2; break;
-                        case 'center': childCenterY = cellY + spannedHeight / 2; break;
-                        case 'start': default: childCenterY = cellY + childHeight / 2; break;
-                    }
-                    child.position.set(childCenterX, childCenterY);
-
                     for (let r_offset = 0; r_offset < rowSpan; r_offset++) {
                         for (let c_offset = 0; c_offset < colSpan; c_offset++) {
                             occupancyGrid[searchRow + r_offset][c + c_offset] = true;
                         }
                     }
+
+                    placedItems.push({
+                        component: child,
+                        row: searchRow,
+                        col: c,
+                        rowSpan,
+                        colSpan,
+                        childWidth,
+                        childHeight
+                    });
 
                     maxRowUsed = Math.max(maxRowUsed, searchRow + rowSpan - 1);
                     foundPosition = true;
@@ -1078,8 +1109,67 @@ const _layoutSquareWithSpanning = (components: LayoutComponent[], options: Layou
     }
 
     const totalRows = maxRowUsed + 1;
+
+    for (const item of placedItems) {
+        const { component, row, col, rowSpan, colSpan, childWidth, childHeight } = item;
+
+        const spannedWidth = colSpan * cellWidth - columnGap;
+        const spannedHeight = rowSpan * cellHeight - rowGap;
+        const cellX = col * cellWidth;
+        const cellY = row * cellHeight;
+
+        let childCenterX: number;
+        switch (justifyItems) {
+            case 'end': childCenterX = cellX + spannedWidth - childWidth / 2; break;
+            case 'center': childCenterX = cellX + spannedWidth / 2; break;
+            case 'start': default: childCenterX = cellX + childWidth / 2; break;
+        }
+
+        let childCenterY: number;
+        switch (alignItems) {
+            case 'end': childCenterY = cellY + spannedHeight - childHeight / 2; break;
+            case 'center': childCenterY = cellY + spannedHeight / 2; break;
+            case 'start': default: childCenterY = cellY + childHeight / 2; break;
+        }
+
+        if (cornerOffset !== 0) {
+            const isTop = row === 0;
+            const isBottom = (row + rowSpan) === totalRows;
+            const isLeft = col === 0;
+            const isRight = (col + colSpan) === columns;
+
+            if (isTop && isLeft) {
+                childCenterX -= cornerOffset;
+                childCenterY -= cornerOffset;
+            }
+            if (isTop && isRight) {
+                childCenterX += cornerOffset;
+                childCenterY -= cornerOffset;
+            }
+            if (isBottom && isLeft) {
+                childCenterX -= cornerOffset;
+                childCenterY += cornerOffset;
+            }
+            if (isBottom && isRight) {
+                childCenterX += cornerOffset;
+                childCenterY += cornerOffset;
+            }
+        }
+
+        component.position.set(childCenterX, childCenterY);
+    }
+
     const gridWidth = columns * cellWidth - columnGap;
     const totalHeight = totalRows * cellHeight - rowGap;
+
+    if (cornerOffset > 0) {
+        return {
+            minX: -cornerOffset,
+            minY: -cornerOffset,
+            maxX: gridWidth + cornerOffset,
+            maxY: totalHeight + cornerOffset
+        };
+    }
 
     return { minX: 0, minY: 0, maxX: gridWidth, maxY: totalHeight };
 };
@@ -1257,10 +1347,11 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         cornerSortBy = null,
         sortDirection = 'desc',
         offset = 0,
-        rotation = 'none'
-    } = options;
-    const prioritizeCorners = options.prioritizeCorners || !!cornerSortBy;
+        rotation = 'none',
+        cornerOffset = 0
+    } = options as any;
 
+    const prioritizeCorners = options.prioritizeCorners || !!cornerSortBy;
     const numComponents = components.length;
 
     let effectiveRows = rows;
@@ -1311,8 +1402,30 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     if (perimeterSlots.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
     const placeChild = (child: LayoutComponent, slot: { r: number, c: number }) => {
-        const x = slot.c * cellWidth + maxChildWidth / 2;
-        const y = slot.r * cellHeight + maxChildHeight / 2;
+        let x = slot.c * cellWidth + maxChildWidth / 2;
+        let y = slot.r * cellHeight + maxChildHeight / 2;
+
+        if (cornerOffset !== 0) {
+            const isTop = slot.r === 0;
+            const isBottom = slot.r === effectiveRows - 1;
+            const isLeft = slot.c === 0;
+            const isRight = slot.c === columns - 1;
+
+            if (isTop && isLeft) {
+                x -= cornerOffset;
+                y -= cornerOffset;
+            } else if (isTop && isRight) {
+                x += cornerOffset;
+                y -= cornerOffset;
+            } else if (isBottom && isRight) {
+                x += cornerOffset;
+                y += cornerOffset;
+            } else if (isBottom && isLeft) {
+                x -= cornerOffset;
+                y += cornerOffset;
+            }
+        }
+
         child.position.set(x, y);
     };
 
@@ -1393,6 +1506,16 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
                 child.rotation = 0;
             }
         }
+    }
+
+    if (cornerOffset > 0) {
+        const bounds = _calculateBoundsFromComponents(components, options);
+        return {
+            minX: bounds.minX - cornerOffset,
+            minY: bounds.minY - cornerOffset,
+            maxX: bounds.maxX + cornerOffset,
+            maxY: bounds.maxY + cornerOffset
+        };
     }
 
     return _calculateBoundsFromComponents(components, options);
