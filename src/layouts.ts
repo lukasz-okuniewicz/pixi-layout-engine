@@ -216,29 +216,27 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
         rotationOffset = 0,
         radiusJitter = 0,
         angleJitter = 0,
-    } = options;
+        perspectiveY = 1,
+        depthScale = 0,
+        enableZIndex = false,
+        // --- NEW OPTION ---
+        globalRotation = 0 // Rotates the entire carousel (in degrees)
+    } = options as any;
 
     let componentsToLayout = components;
 
+    // ... [Sorting Logic] ...
     if (sortBy) {
         componentsToLayout = [...components];
-        const sortFn = typeof sortBy === 'function'
-            ? sortBy
-            : (a: any, b: any) => {
-                const valA = a[sortBy] || 0;
-                const valB = b[sortBy] || 0;
-                return valA - valB;
-            };
-
+        const sortFn = typeof sortBy === 'function' ? sortBy : (a: any, b: any) => ((a[sortBy] || 0) - (b[sortBy] || 0));
         componentsToLayout.sort(sortFn);
-        if (sortDirection === 'desc') {
-            componentsToLayout.reverse();
-        }
+        if (sortDirection === 'desc') componentsToLayout.reverse();
     }
 
     const total = componentsToLayout.length;
     if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
+    // ... [Auto Radius Logic] ...
     if (autoRadius) {
         const useFixed = options.sizingMode === "fixed";
         const fixedWidth = options.fixedWidth ?? 0;
@@ -252,11 +250,11 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
     const toRad = (deg: number): number => deg * (Math.PI / 180);
     const startRad = toRad(startAngle);
     const endRad = toRad(endAngle);
-    let totalAngle = endRad - startRad;
+    const globalRotRad = toRad(globalRotation); // Convert global rotation to radians
 
+    let totalAngle = endRad - startRad;
     const totalAngularSpacing = toRad(angularSpacing) * (total > 1 ? total - 1 : 0);
     const effectiveTotalAngle = totalAngle - totalAngularSpacing;
-
     const isFullCircle = Math.abs(totalAngle) >= 2 * Math.PI - 0.001;
 
     let totalValue = 1;
@@ -266,25 +264,18 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
 
     let angleOffset = 0;
     if (!isFullCircle && justifyArc !== 'start') {
-        let contentAngle = 0;
-        if(distributeByValue) {
-            contentAngle = effectiveTotalAngle;
-        } else {
-            contentAngle = toRad(angularSpacing) * (total -1);
-        }
-
+        let contentAngle = distributeByValue ? effectiveTotalAngle : toRad(angularSpacing) * (total - 1);
         const remainingAngle = totalAngle - contentAngle;
-        if(justifyArc === 'center') {
-            angleOffset = remainingAngle / 2;
-        }
+        if(justifyArc === 'center') angleOffset = remainingAngle / 2;
     }
-
 
     let currentAngle = startRad + angleOffset;
     const baseRadius = innerRadius > 0 ? (radius + innerRadius) / 2 : radius;
 
     componentsToLayout.forEach((child, i) => {
         let angleForThisItem: number;
+
+        // 1. Calculate Base Angle (Position in the list)
         if (distributeByValue) {
             const proportion = (child.value || 1) / totalValue;
             const angleSegment = proportion * effectiveTotalAngle;
@@ -300,17 +291,46 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
             angleForThisItem += toRad((Math.random() - 0.5) * 2 * angleJitter);
         }
 
+        // 2. Apply Global Rotation
+        // We add this *before* calculating X/Y so the perspective applies to the new position
+        const finalAngle = angleForThisItem + globalRotRad;
+
         const individualRadiusOffset = typeof radiusOffset === 'function' ? radiusOffset(child, i) : (radiusOffset || 0);
         const spiralOffset = spiralFactor * i;
         const jitterOffset = (Math.random() - 0.5) * 2 * radiusJitter;
         const finalRadius = baseRadius + individualRadiusOffset + spiralOffset + jitterOffset;
 
-        const x = finalRadius * Math.cos(angleForThisItem);
-        const y = finalRadius * Math.sin(angleForThisItem);
+        // 3. Calculate Position
+        const rawX = finalRadius * Math.cos(finalAngle);
+        const rawY = finalRadius * Math.sin(finalAngle);
+
+        // 4. Apply Perspective (Squash Y)
+        const x = rawX;
+        const y = rawY * perspectiveY;
+
         child.position.set(x, y);
 
+        // 5. Depth Scaling & Z-Index
+        // Math.sin(finalAngle) is 1 at bottom (front), -1 at top (back)
+        const sineVal = Math.sin(finalAngle);
+
+        if (depthScale !== 0 && (child as any).scale) {
+            const scaleFactor = 1 + (sineVal * depthScale);
+            const finalScale = Math.max(0.1, scaleFactor);
+            (child as any).scale.set(finalScale);
+        } else if ((child as any).scale) {
+            (child as any).scale.set(1);
+        }
+
+        if (enableZIndex && (child as any).zIndex !== undefined) {
+            (child as any).zIndex = Math.floor(sineVal * 1000);
+        }
+
+        // 6. Item Rotation
         if (rotateToCenter && typeof child.rotation !== 'undefined') {
-            child.rotation = angleForThisItem + Math.PI / 2 + toRad(rotationOffset);
+            // Rotate based on the visual angle (squashed)
+            const angle2D = Math.atan2(y, x);
+            child.rotation = angle2D + Math.PI / 2 + toRad(rotationOffset);
         } else if (typeof child.rotation !== 'undefined') {
             child.rotation = 0;
         }
