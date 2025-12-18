@@ -219,13 +219,11 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
         perspectiveY = 1,
         depthScale = 0,
         enableZIndex = false,
-        // --- NEW OPTION ---
-        globalRotation = 0 // Rotates the entire carousel (in degrees)
+        globalRotation = 0
     } = options as any;
 
     let componentsToLayout = components;
 
-    // ... [Sorting Logic] ...
     if (sortBy) {
         componentsToLayout = [...components];
         const sortFn = typeof sortBy === 'function' ? sortBy : (a: any, b: any) => ((a[sortBy] || 0) - (b[sortBy] || 0));
@@ -236,7 +234,6 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
     const total = componentsToLayout.length;
     if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
-    // ... [Auto Radius Logic] ...
     if (autoRadius) {
         const useFixed = options.sizingMode === "fixed";
         const fixedWidth = options.fixedWidth ?? 0;
@@ -250,7 +247,7 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
     const toRad = (deg: number): number => deg * (Math.PI / 180);
     const startRad = toRad(startAngle);
     const endRad = toRad(endAngle);
-    const globalRotRad = toRad(globalRotation); // Convert global rotation to radians
+    const globalRotRad = toRad(globalRotation);
 
     let totalAngle = endRad - startRad;
     const totalAngularSpacing = toRad(angularSpacing) * (total > 1 ? total - 1 : 0);
@@ -275,7 +272,6 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
     componentsToLayout.forEach((child, i) => {
         let angleForThisItem: number;
 
-        // 1. Calculate Base Angle (Position in the list)
         if (distributeByValue) {
             const proportion = (child.value || 1) / totalValue;
             const angleSegment = proportion * effectiveTotalAngle;
@@ -291,27 +287,19 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
             angleForThisItem += toRad((Math.random() - 0.5) * 2 * angleJitter);
         }
 
-        // 2. Apply Global Rotation
-        // We add this *before* calculating X/Y so the perspective applies to the new position
         const finalAngle = angleForThisItem + globalRotRad;
 
         const individualRadiusOffset = typeof radiusOffset === 'function' ? radiusOffset(child, i) : (radiusOffset || 0);
         const spiralOffset = spiralFactor * i;
         const jitterOffset = (Math.random() - 0.5) * 2 * radiusJitter;
         const finalRadius = baseRadius + individualRadiusOffset + spiralOffset + jitterOffset;
-
-        // 3. Calculate Position
         const rawX = finalRadius * Math.cos(finalAngle);
         const rawY = finalRadius * Math.sin(finalAngle);
-
-        // 4. Apply Perspective (Squash Y)
         const x = rawX;
         const y = rawY * perspectiveY;
 
         child.position.set(x, y);
 
-        // 5. Depth Scaling & Z-Index
-        // Math.sin(finalAngle) is 1 at bottom (front), -1 at top (back)
         const sineVal = Math.sin(finalAngle);
 
         if (depthScale !== 0 && (child as any).scale) {
@@ -326,9 +314,7 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
             (child as any).zIndex = Math.floor(sineVal * 1000);
         }
 
-        // 6. Item Rotation
         if (rotateToCenter && typeof child.rotation !== 'undefined') {
-            // Rotate based on the visual angle (squashed)
             const angle2D = Math.atan2(y, x);
             child.rotation = angle2D + Math.PI / 2 + toRad(rotationOffset);
         } else if (typeof child.rotation !== 'undefined') {
@@ -1368,24 +1354,23 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         sortDirection = 'desc',
         offset = 0,
         rotation = 'none',
-        cornerOffset = 0
+        cornerOffset = 0,
+        globalRotation = 0,
+        perspectiveY = 1,
+        depthScale = 0,
+        enableZIndex = false
     } = options as any;
 
     const prioritizeCorners = options.prioritizeCorners || !!cornerSortBy;
     const numComponents = components.length;
 
     let effectiveRows = rows;
-
     if (autoRows) {
-        if (numComponents === 0) {
-            effectiveRows = 0;
-        } else if (columns === 1) {
-            effectiveRows = numComponents;
-        } else if (numComponents <= columns) {
-            effectiveRows = 1;
-        } else if (numComponents <= 2 * columns) {
-            effectiveRows = 2;
-        } else {
+        if (numComponents === 0) effectiveRows = 0;
+        else if (columns === 1) effectiveRows = numComponents;
+        else if (numComponents <= columns) effectiveRows = 1;
+        else if (numComponents <= 2 * columns) effectiveRows = 2;
+        else {
             effectiveRows = Math.ceil((numComponents - 2 * columns + 4) / 2);
             effectiveRows = Math.max(2, effectiveRows);
         }
@@ -1421,6 +1406,15 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     }
     if (perimeterSlots.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
+    const gridWidth = (columns - 1) * cellWidth + maxChildWidth;
+    const gridHeight = (effectiveRows - 1) * cellHeight + maxChildHeight;
+    const centerX = gridWidth / 2 - maxChildWidth / 2;
+    const centerY = gridHeight / 2 - maxChildHeight / 2;
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    const globalRotRad = toRad(globalRotation);
+    const cosRot = Math.cos(globalRotRad);
+    const sinRot = Math.sin(globalRotRad);
+
     const placeChild = (child: LayoutComponent, slot: { r: number, c: number }) => {
         let x = slot.c * cellWidth + maxChildWidth / 2;
         let y = slot.r * cellHeight + maxChildHeight / 2;
@@ -1431,111 +1425,74 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
             const isLeft = slot.c === 0;
             const isRight = slot.c === columns - 1;
 
-            if (isTop && isLeft) {
-                x -= cornerOffset;
-                y -= cornerOffset;
-            } else if (isTop && isRight) {
-                x += cornerOffset;
-                y -= cornerOffset;
-            } else if (isBottom && isRight) {
-                x += cornerOffset;
-                y += cornerOffset;
-            } else if (isBottom && isLeft) {
-                x -= cornerOffset;
-                y += cornerOffset;
+            if (isTop && isLeft) { x -= cornerOffset; y -= cornerOffset; }
+            else if (isTop && isRight) { x += cornerOffset; y -= cornerOffset; }
+            else if (isBottom && isRight) { x += cornerOffset; y += cornerOffset; }
+            else if (isBottom && isLeft) { x -= cornerOffset; y += cornerOffset; }
+        }
+
+        let dx = x - centerX;
+        let dy = y - centerY;
+
+        if (offset !== 0) {
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0) {
+                dx += (dx / dist) * offset;
+                dy += (dy / dist) * offset;
             }
         }
 
-        child.position.set(x, y);
+        const rotX = dx * cosRot - dy * sinRot;
+        const rotY = dx * sinRot + dy * cosRot;
+        const finalX = rotX;
+        const finalY = rotY * perspectiveY;
+        const maxExtent = Math.max(gridWidth, gridHeight) / 2 || 1;
+        const depthFactor = rotY / maxExtent;
+
+        if (depthScale !== 0 && (child as any).scale) {
+            const scale = 1 + (depthFactor * depthScale);
+            (child as any).scale.set(Math.max(0.1, scale));
+        } else if ((child as any).scale) {
+            (child as any).scale.set(1);
+        }
+
+        if (enableZIndex && (child as any).zIndex !== undefined) {
+            (child as any).zIndex = Math.floor(depthFactor * 1000);
+        }
+
+        child.position.set(finalX, finalY);
+
+        if (typeof child.rotation !== 'undefined') {
+            if (rotation !== 'none') {
+                const angle = Math.atan2(rotY, rotX);
+                child.rotation = angle + (rotation === 'face-outward' ? Math.PI / 2 : -Math.PI / 2);
+            } else {
+                child.rotation = 0;
+            }
+        }
     };
 
     const placedComponentSet = new Set<LayoutComponent>();
     const usedSlotSet = new Set<string>();
 
     if (prioritizeCorners && columns > 1 && effectiveRows > 1) {
-        const cornerSlots = [
-            { r: 0, c: 0 },
-            { r: 0, c: columns - 1 },
-            { r: effectiveRows - 1, c: columns - 1 },
-            { r: effectiveRows - 1, c: 0 },
-        ].slice(0, numComponents);
-
-        let componentsToPlaceInCorners = [...components];
-        if (cornerSortBy) {
-            const sortFn = typeof cornerSortBy === 'function'
-                ? cornerSortBy
-                : (a: any, b: any) => (a[cornerSortBy] || 0) - (b[cornerSortBy] || 0);
-            componentsToPlaceInCorners.sort(sortFn);
-            if (sortDirection === 'desc') componentsToPlaceInCorners.reverse();
-        }
-
-        cornerSlots.forEach((cornerSlot, i) => {
-            if (i >= componentsToPlaceInCorners.length) return;
-            const component = componentsToPlaceInCorners[i];
-
-            placeChild(component, cornerSlot);
-            placedComponentSet.add(component);
-            usedSlotSet.add(`${cornerSlot.r},${cornerSlot.c}`);
+        const cornerSlots = [{r:0,c:0}, {r:0,c:columns-1}, {r:effectiveRows-1,c:columns-1}, {r:effectiveRows-1,c:0}].slice(0, numComponents);
+        cornerSlots.forEach((slot, i) => {
+            // @ts-ignore
+            placeChild(components[i], slot);
         });
     }
 
     const componentsForDistribution = components.filter(c => !placedComponentSet.has(c));
     const slotsForDistribution = perimeterSlots.filter(s => !usedSlotSet.has(`${s.r},${s.c}`));
 
-    const numRemainingSlots = slotsForDistribution.length;
-    const numRemainingComponents = componentsForDistribution.length;
-
-    if (numRemainingComponents > 0 && numRemainingSlots > 0) {
+    if (componentsForDistribution.length > 0 && slotsForDistribution.length > 0) {
         componentsForDistribution.forEach((child, i) => {
-            let slotIndex: number;
-            if (distribution === 'packed') {
-                slotIndex = i;
-            } else {
-                slotIndex = Math.floor(i * (numRemainingSlots / numRemainingComponents));
-            }
-
-            if (slotIndex < numRemainingSlots) {
+            let slotIndex = distribution === 'packed' ? i : Math.floor(i * (slotsForDistribution.length / componentsForDistribution.length));
+            if (slotIndex < slotsForDistribution.length) {
                 placeChild(child, slotsForDistribution[slotIndex]);
             }
         });
-    }
-
-    const totalWidth = (columns - 1) * cellWidth + maxChildWidth;
-    const totalHeight = (effectiveRows - 1) * cellHeight + maxChildHeight;
-    const centerX = totalWidth / 2 - maxChildWidth / 2;
-    const centerY = totalHeight / 2 - maxChildHeight / 2;
-
-    for (const child of components) {
-        if (offset !== 0) {
-            const vecX = child.position.x - centerX;
-            const vecY = child.position.y - centerY;
-            const dist = Math.sqrt(vecX * vecX + vecY * vecY);
-            if (dist > 0) {
-                child.position.x += (vecX / dist) * offset;
-                child.position.y += (vecY / dist) * offset;
-            }
-        }
-
-        if (typeof child.rotation !== 'undefined') {
-            if (rotation !== 'none') {
-                const finalVecX = child.position.x - centerX;
-                const finalVecY = child.position.y - centerY;
-                const angle = Math.atan2(finalVecY, finalVecX);
-                child.rotation = angle + (rotation === 'face-outward' ? Math.PI / 2 : -Math.PI / 2);
-            } else {
-                child.rotation = 0;
-            }
-        }
-    }
-
-    if (cornerOffset > 0) {
-        const bounds = _calculateBoundsFromComponents(components, options);
-        return {
-            minX: bounds.minX - cornerOffset,
-            minY: bounds.minY - cornerOffset,
-            maxX: bounds.maxX + cornerOffset,
-            maxY: bounds.maxY + cornerOffset
-        };
     }
 
     return _calculateBoundsFromComponents(components, options);
