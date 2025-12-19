@@ -225,6 +225,12 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
 
     let componentsToLayout = components;
 
+    if (enableZIndex && !sortBy) {
+        componentsToLayout = [...components].sort((a: any, b: any) => {
+            return (a.layoutId || 0) - (b.layoutId || 0);
+        });
+    }
+
     if (sortBy) {
         componentsToLayout = [...components];
         const sortFn = typeof sortBy === 'function' ? sortBy : (a: any, b: any) => ((a[sortBy] || 0) - (b[sortBy] || 0));
@@ -264,7 +270,7 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
     if (!isFullCircle && justifyArc !== 'start') {
         let contentAngle = distributeByValue ? effectiveTotalAngle : toRad(angularSpacing) * (total - 1);
         const remainingAngle = totalAngle - contentAngle;
-        if(justifyArc === 'center') angleOffset = remainingAngle / 2;
+        if (justifyArc === 'center') angleOffset = remainingAngle / 2;
     }
 
     let currentAngle = startRad + angleOffset;
@@ -308,9 +314,8 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
 
         if ((child as any).scale) {
             if (depthScale !== 0 || maxScale !== 1) {
-                const backScale = maxScale * (1 - Math.min(depthScale, 0.99)); // Prevent negative scale
+                const backScale = maxScale * (1 - Math.min(depthScale, 0.99));
                 const finalScale = backScale + (maxScale - backScale) * depthFactor;
-
                 (child as any).scale.set(finalScale);
             } else {
                 (child as any).scale.set(1);
@@ -1369,15 +1374,27 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     } = options as any;
 
     const prioritizeCorners = options.prioritizeCorners || !!cornerSortBy;
-    const numComponents = components.length;
+    let stableComponents = components;
+    if (enableZIndex && !cornerSortBy) {
+        stableComponents = [...components].sort((a: any, b: any) => {
+            return (a.layoutId || 0) - (b.layoutId || 0);
+        });
+    }
+
+    const numComponents = stableComponents.length;
 
     let effectiveRows = rows;
+
     if (autoRows) {
-        if (numComponents === 0) effectiveRows = 0;
-        else if (columns === 1) effectiveRows = numComponents;
-        else if (numComponents <= columns) effectiveRows = 1;
-        else if (numComponents <= 2 * columns) effectiveRows = 2;
-        else {
+        if (numComponents === 0) {
+            effectiveRows = 0;
+        } else if (columns === 1) {
+            effectiveRows = numComponents;
+        } else if (numComponents <= columns) {
+            effectiveRows = 1;
+        } else if (numComponents <= 2 * columns) {
+            effectiveRows = 2;
+        } else {
             effectiveRows = Math.ceil((numComponents - 2 * columns + 4) / 2);
             effectiveRows = Math.max(2, effectiveRows);
         }
@@ -1387,7 +1404,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     }
 
-    const { cellWidth, cellHeight, maxChildWidth, maxChildHeight } = _calculateGridCellSize(components, options);
+    const { cellWidth, cellHeight, maxChildWidth, maxChildHeight } = _calculateGridCellSize(stableComponents, options);
 
     const topPath = Array.from({ length: columns }, (_, i) => ({ r: 0, c: i }));
     const rightPath = Array.from({ length: effectiveRows - 1 }, (_, i) => ({ r: i + 1, c: columns - 1 }));
@@ -1395,7 +1412,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     const leftPath = Array.from({ length: effectiveRows - 2 }, (_, i) => ({ r: effectiveRows - 2 - i, c: 0 }));
 
     let canonicalPath = [...topPath, ...rightPath, ...bottomPath, ...leftPath];
-    if (canonicalPath.length > 1 && canonicalPath[0].r === canonicalPath[canonicalPath.length-1].r && canonicalPath[0].c === canonicalPath[canonicalPath.length-1].c) {
+    if (canonicalPath.length > 1 && canonicalPath[0].r === canonicalPath[canonicalPath.length - 1].r && canonicalPath[0].c === canonicalPath[canonicalPath.length - 1].c) {
         canonicalPath.pop();
     }
 
@@ -1409,7 +1426,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     if (direction === 'counter-clockwise') {
         const first = perimeterSlots.shift();
         perimeterSlots.reverse();
-        if(first) perimeterSlots.unshift(first);
+        if (first) perimeterSlots.unshift(first);
     }
     if (perimeterSlots.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
@@ -1417,6 +1434,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     const gridHeight = (effectiveRows - 1) * cellHeight + maxChildHeight;
     const centerX = gridWidth / 2 - maxChildWidth / 2;
     const centerY = gridHeight / 2 - maxChildHeight / 2;
+
     const toRad = (deg: number) => deg * (Math.PI / 180);
     const globalRotRad = toRad(globalRotation);
     const cosRot = Math.cos(globalRotRad);
@@ -1451,8 +1469,10 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
 
         const rotX = dx * cosRot - dy * sinRot;
         const rotY = dx * sinRot + dy * cosRot;
+
         const finalX = rotX;
         const finalY = rotY * perspectiveY;
+
         const maxExtent = Math.max(gridWidth, gridHeight) / 2 || 1;
         const depthFactor = rotY / maxExtent;
 
@@ -1483,26 +1503,64 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     const usedSlotSet = new Set<string>();
 
     if (prioritizeCorners && columns > 1 && effectiveRows > 1) {
-        const cornerSlots = [{r:0,c:0}, {r:0,c:columns-1}, {r:effectiveRows-1,c:columns-1}, {r:effectiveRows-1,c:0}].slice(0, numComponents);
-        cornerSlots.forEach((slot, i) => {
-            // @ts-ignore
-            placeChild(components[i], slot);
+        const cornerSlots = [
+            { r: 0, c: 0 },
+            { r: 0, c: columns - 1 },
+            { r: effectiveRows - 1, c: columns - 1 },
+            { r: effectiveRows - 1, c: 0 },
+        ].slice(0, numComponents);
+
+        let componentsToPlaceInCorners = [...stableComponents];
+        if (cornerSortBy) {
+            const sortFn = typeof cornerSortBy === 'function'
+                ? cornerSortBy
+                : (a: any, b: any) => (a[cornerSortBy] || 0) - (b[cornerSortBy] || 0);
+            componentsToPlaceInCorners.sort(sortFn);
+            if (sortDirection === 'desc') componentsToPlaceInCorners.reverse();
+        }
+
+        cornerSlots.forEach((cornerSlot, i) => {
+            if (i >= componentsToPlaceInCorners.length) return;
+            const component = componentsToPlaceInCorners[i];
+
+            placeChild(component, cornerSlot);
+            placedComponentSet.add(component);
+            usedSlotSet.add(`${cornerSlot.r},${cornerSlot.c}`);
         });
     }
 
-    const componentsForDistribution = components.filter(c => !placedComponentSet.has(c));
+    const componentsForDistribution = stableComponents.filter(c => !placedComponentSet.has(c));
     const slotsForDistribution = perimeterSlots.filter(s => !usedSlotSet.has(`${s.r},${s.c}`));
 
-    if (componentsForDistribution.length > 0 && slotsForDistribution.length > 0) {
+    const numRemainingSlots = slotsForDistribution.length;
+    const numRemainingComponents = componentsForDistribution.length;
+
+    if (numRemainingComponents > 0 && numRemainingSlots > 0) {
         componentsForDistribution.forEach((child, i) => {
-            let slotIndex = distribution === 'packed' ? i : Math.floor(i * (slotsForDistribution.length / componentsForDistribution.length));
-            if (slotIndex < slotsForDistribution.length) {
+            let slotIndex: number;
+            if (distribution === 'packed') {
+                slotIndex = i;
+            } else {
+                slotIndex = Math.floor(i * (numRemainingSlots / numRemainingComponents));
+            }
+
+            if (slotIndex < numRemainingSlots) {
                 placeChild(child, slotsForDistribution[slotIndex]);
             }
         });
     }
 
-    return _calculateBoundsFromComponents(components, options);
+    if (cornerOffset > 0) {
+        const bounds = _calculateBoundsFromComponents(stableComponents, options);
+        return {
+            minX: bounds.minX - cornerOffset,
+            minY: bounds.minY - cornerOffset,
+            maxX: bounds.maxX + cornerOffset,
+            maxY: bounds.maxY + cornerOffset
+        };
+    }
+
+    return _calculateBoundsFromComponents(stableComponents, options);
 };
 
 /**
