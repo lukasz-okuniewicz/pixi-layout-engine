@@ -219,7 +219,8 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
         perspectiveY = 1,
         depthScale = 0,
         enableZIndex = false,
-        globalRotation = 0
+        globalRotation = 0,
+        maxScale = 1
     } = options as any;
 
     let componentsToLayout = components;
@@ -293,25 +294,31 @@ const _layoutCircle = (components: LayoutComponent[], options: LayoutOptions = {
         const spiralOffset = spiralFactor * i;
         const jitterOffset = (Math.random() - 0.5) * 2 * radiusJitter;
         const finalRadius = baseRadius + individualRadiusOffset + spiralOffset + jitterOffset;
+
         const rawX = finalRadius * Math.cos(finalAngle);
         const rawY = finalRadius * Math.sin(finalAngle);
+
         const x = rawX;
         const y = rawY * perspectiveY;
 
         child.position.set(x, y);
 
         const sineVal = Math.sin(finalAngle);
+        const depthFactor = (sineVal + 1) / 2;
 
-        if (depthScale !== 0 && (child as any).scale) {
-            const scaleFactor = 1 + (sineVal * depthScale);
-            const finalScale = Math.max(0.1, scaleFactor);
-            (child as any).scale.set(finalScale);
-        } else if ((child as any).scale) {
-            (child as any).scale.set(1);
+        if ((child as any).scale) {
+            if (depthScale !== 0 || maxScale !== 1) {
+                const backScale = maxScale * (1 - Math.min(depthScale, 0.99)); // Prevent negative scale
+                const finalScale = backScale + (maxScale - backScale) * depthFactor;
+
+                (child as any).scale.set(finalScale);
+            } else {
+                (child as any).scale.set(1);
+            }
         }
 
         if (enableZIndex && (child as any).zIndex !== undefined) {
-            (child as any).zIndex = Math.floor(sineVal * 1000);
+            (child as any).zIndex = Math.floor(depthFactor * 1000);
         }
 
         if (rotateToCenter && typeof child.rotation !== 'undefined') {
