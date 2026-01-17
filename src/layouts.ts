@@ -73,6 +73,7 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
         [layoutEnum.SPREAD_EXPLOSION]: _layoutSpreadExplosion,
         [layoutEnum.PYRAMID]: _layoutPyramid,
         [layoutEnum.REELS]: _layoutReels,
+        [layoutEnum.REEL_SPINNER]: _layoutReelSpinner,
     };
 
     let bounds: Bounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
@@ -2779,7 +2780,6 @@ const _layoutReels = (components: LayoutComponent[], options: LayoutOptions): Bo
 
     const reels: LayoutComponent[][] = Array.from({ length: columns }, () => []);
 
-    // FIX: Assign to reels based on a STABLE reelIndex property if it exists
     components.forEach((child, i) => {
         const rIndex = (child as any).reelIndex !== undefined
             ? (child as any).reelIndex % columns
@@ -2809,7 +2809,6 @@ const _layoutReels = (components: LayoutComponent[], options: LayoutOptions): Bo
             if (alignItems === 'start') {
                 childY = (rowIndex * cellHeight) + childHeight / 2 + reelStagger;
             } else {
-                // Gravity: Stack items from the bottom up within their specific reel
                 const visualRow = (maxItemsInAnyReel - 1) - rowIndex;
                 childY = (visualRow * cellHeight) + maxChildHeight - childHeight / 2 + reelStagger;
             }
@@ -2822,6 +2821,70 @@ const _layoutReels = (components: LayoutComponent[], options: LayoutOptions): Bo
         minX: 0, minY: 0,
         maxX: columns * cellWidth - columnGap,
         maxY: maxItemsInAnyReel * cellHeight - rowGap + ((columns - 1) * stagger)
+    };
+};
+
+/**
+ * Arranges components as if they are wrapped around a rotating cylinder (slot machine reel).
+ * The 'spinDegrees' property rotates the entire cylinder.
+ * Items move vertically, scaling down and fading (via zIndex/scale) as they move to the back.
+ *
+ * @private
+ * @param {LayoutComponent[]} components - The components to arrange.
+ * @param {LayoutOptions} options - Configuration.
+ * Uses `spinDegrees`, `radius`, `itemAngleStep`, and `perspective`.
+ */
+const _layoutReelSpinner = (components: LayoutComponent[], options: LayoutOptions): Bounds => {
+    const {
+        spinDegrees = 0,
+        radius = 250,
+        itemAngleStep = 30,
+        depthScale = 0.5,
+        vertical = true,
+        width = 200,
+        height = 400
+    } = options as any;
+
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    const spinRad = toRad(spinDegrees);
+    const stepRad = toRad(itemAngleStep);
+    const stableComponents = [...components].sort((a: any, b: any) => (a.layoutId || 0) - (b.layoutId || 0));
+
+    stableComponents.forEach((child, i) => {
+        const angle = (i * stepRad) + spinRad;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+
+        const offset = sin * radius;
+        if (vertical) {
+            child.position.set(0, offset);
+        } else {
+            child.position.set(offset, 0);
+        }
+
+        const isVisible = cos > 0;
+        if ((child as any).scale) {
+            if (!isVisible) {
+                (child as any).scale.set(0);
+                (child as any).visible = false;
+            } else {
+                (child as any).visible = true;
+                const s = 1 - (1 - cos) * depthScale;
+                (child as any).scale.set(s);
+            }
+        }
+        if ((child as any).zIndex !== undefined) {
+            (child as any).zIndex = Math.floor(cos * 1000);
+        }
+    });
+
+    return {
+        minX: -width / 2,
+        maxX: width / 2,
+        minY: -height / 2,
+        maxY: height / 2
     };
 };
 

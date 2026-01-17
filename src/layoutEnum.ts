@@ -22,4 +22,5 @@ export const layoutEnum = {
     SPREAD_EXPLOSION: "spread-explosion",
     PYRAMID: "pyramid",
     REELS: 'reels',
+    REEL_SPINNER: "REEL_SPINNER",
 } as const;
