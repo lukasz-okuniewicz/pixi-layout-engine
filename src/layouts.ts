@@ -72,6 +72,7 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
         [layoutEnum.PAYOUT_ZONES]: _layoutPayoutZones,
         [layoutEnum.SPREAD_EXPLOSION]: _layoutSpreadExplosion,
         [layoutEnum.PYRAMID]: _layoutPyramid,
+        [layoutEnum.REELS]: _layoutReels,
     };
 
     let bounds: Bounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
@@ -2754,6 +2755,74 @@ const _layoutSquareDiagonalFill = (components: LayoutComponent[], options: Layou
     const gridWidth = columns * cellWidth - columnGap;
     const totalHeight = totalRows * cellHeight - rowGap;
     return { minX: 0, minY: 0, maxX: gridWidth, maxY: totalHeight };
+};
+
+/**
+ * Arranges components in vertical "reels" (columns).
+ * Elements in each reel are stacked from the bottom-up (Gravity).
+ * If an element is removed from the middle of the array, elements above it
+ * will "drop" down to fill the gap in the next layout pass.
+ *
+ * @private
+ */
+const _layoutReels = (components: LayoutComponent[], options: LayoutOptions): Bounds => {
+    const {
+        columns = 5,
+        justifyItems = 'center',
+        alignItems = 'end',
+        stagger = 0,
+    } = options as any;
+
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
+    const { cellWidth, cellHeight, maxChildWidth, maxChildHeight, columnGap, rowGap } = _calculateGridCellSize(components, options);
+
+    const reels: LayoutComponent[][] = Array.from({ length: columns }, () => []);
+
+    // FIX: Assign to reels based on a STABLE reelIndex property if it exists
+    components.forEach((child, i) => {
+        const rIndex = (child as any).reelIndex !== undefined
+            ? (child as any).reelIndex % columns
+            : i % columns;
+        reels[rIndex].push(child);
+    });
+
+    const maxItemsInAnyReel = Math.max(...reels.map(r => r.length));
+
+    reels.forEach((reel, colIndex) => {
+        const reelStagger = colIndex * stagger;
+
+        reel.forEach((child, rowIndex) => {
+            const useFixed = options.sizingMode === 'fixed';
+            const childWidth = useFixed ? (options.fixedWidth ?? 0) : child.width;
+            const childHeight = useFixed ? (options.fixedHeight ?? 0) : child.height;
+
+            const xBase = colIndex * cellWidth;
+            let childX: number;
+            switch (justifyItems) {
+                case 'start': childX = xBase + childWidth / 2; break;
+                case 'end':   childX = xBase + maxChildWidth - childWidth / 2; break;
+                default:      childX = xBase + maxChildWidth / 2; break;
+            }
+
+            let childY: number;
+            if (alignItems === 'start') {
+                childY = (rowIndex * cellHeight) + childHeight / 2 + reelStagger;
+            } else {
+                // Gravity: Stack items from the bottom up within their specific reel
+                const visualRow = (maxItemsInAnyReel - 1) - rowIndex;
+                childY = (visualRow * cellHeight) + maxChildHeight - childHeight / 2 + reelStagger;
+            }
+
+            child.position.set(childX, childY);
+        });
+    });
+
+    return {
+        minX: 0, minY: 0,
+        maxX: columns * cellWidth - columnGap,
+        maxY: maxItemsInAnyReel * cellHeight - rowGap + ((columns - 1) * stagger)
+    };
 };
 
 export { applyLayout };
