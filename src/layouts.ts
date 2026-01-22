@@ -1351,6 +1351,8 @@ const _calculateGridCellSize = (components: LayoutComponent[], options: LayoutOp
 
 /**
  * Arranges components evenly along the outer edge (perimeter) of a defined grid.
+ * Supports "Exclude Corners" to create a cross-like or edge-only arrangement.
+ *
  * @private
  * @param {LayoutComponent[]} components - The components to be arranged.
  * @param {LayoutOptions} options - Layout configuration.
@@ -1372,10 +1374,12 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         globalRotation = 0,
         perspectiveY = 1,
         depthScale = 0,
-        enableZIndex = false
+        enableZIndex = false,
+        excludeCorners = false
     } = options as any;
 
     const prioritizeCorners = options.prioritizeCorners || !!cornerSortBy;
+
     let stableComponents = components;
     if (enableZIndex && !cornerSortBy) {
         stableComponents = [...components].sort((a: any, b: any) => {
@@ -1384,13 +1388,13 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     }
 
     const numComponents = stableComponents.length;
+    if (numComponents === 0 || columns <= 0) {
+        return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    }
 
     let effectiveRows = rows;
-
     if (autoRows) {
-        if (numComponents === 0) {
-            effectiveRows = 0;
-        } else if (columns === 1) {
+        if (columns === 1) {
             effectiveRows = numComponents;
         } else if (numComponents <= columns) {
             effectiveRows = 1;
@@ -1402,35 +1406,46 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         }
     }
 
-    if (numComponents === 0 || effectiveRows <= 0 || columns <= 0) {
-        return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-    }
+    if (effectiveRows <= 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
     const { cellWidth, cellHeight, maxChildWidth, maxChildHeight } = _calculateGridCellSize(stableComponents, options);
-
     const topPath = Array.from({ length: columns }, (_, i) => ({ r: 0, c: i }));
     const rightPath = Array.from({ length: effectiveRows - 1 }, (_, i) => ({ r: i + 1, c: columns - 1 }));
     const bottomPath = Array.from({ length: columns - 1 }, (_, i) => ({ r: effectiveRows - 1, c: columns - 2 - i }));
     const leftPath = Array.from({ length: effectiveRows - 2 }, (_, i) => ({ r: effectiveRows - 2 - i, c: 0 }));
 
     let canonicalPath = [...topPath, ...rightPath, ...bottomPath, ...leftPath];
+
     if (canonicalPath.length > 1 && canonicalPath[0].r === canonicalPath[canonicalPath.length - 1].r && canonicalPath[0].c === canonicalPath[canonicalPath.length - 1].c) {
         canonicalPath.pop();
     }
+
+    if (excludeCorners) {
+        canonicalPath = canonicalPath.filter(slot => {
+            const isTopLeft = slot.r === 0 && slot.c === 0;
+            const isTopRight = slot.r === 0 && slot.c === columns - 1;
+            const isBottomRight = slot.r === effectiveRows - 1 && slot.c === columns - 1;
+            const isBottomLeft = slot.r === effectiveRows - 1 && slot.c === 0;
+            return !(isTopLeft || isTopRight || isBottomRight || isBottomLeft);
+        });
+    }
+
+    if (canonicalPath.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
     let startIndex = 0;
     if (startCorner === 'top-right') startIndex = canonicalPath.findIndex(p => p.r === 0 && p.c === columns - 1);
     else if (startCorner === 'bottom-right') startIndex = canonicalPath.findIndex(p => p.r === effectiveRows - 1 && p.c === columns - 1);
     else if (startCorner === 'bottom-left') startIndex = canonicalPath.findIndex(p => p.r === effectiveRows - 1 && p.c === 0);
+
     startIndex = Math.max(0, startIndex);
 
     let perimeterSlots = [...canonicalPath.slice(startIndex), ...canonicalPath.slice(0, startIndex)];
+
     if (direction === 'counter-clockwise') {
         const first = perimeterSlots.shift();
         perimeterSlots.reverse();
         if (first) perimeterSlots.unshift(first);
     }
-    if (perimeterSlots.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
     const gridWidth = (columns - 1) * cellWidth + maxChildWidth;
     const gridHeight = (effectiveRows - 1) * cellHeight + maxChildHeight;
@@ -1471,25 +1486,22 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
 
         const rotX = dx * cosRot - dy * sinRot;
         const rotY = dx * sinRot + dy * cosRot;
-
         const finalX = rotX;
         const finalY = rotY * perspectiveY;
+
+        child.position.set(finalX, finalY);
 
         const maxExtent = Math.max(gridWidth, gridHeight) / 2 || 1;
         const depthFactor = rotY / maxExtent;
 
         if (depthScale !== 0 && (child as any).scale) {
-            const scale = 1 + (depthFactor * depthScale);
-            (child as any).scale.set(Math.max(0.1, scale));
-        } else if ((child as any).scale) {
-            (child as any).scale.set(1);
+            const s = 1 + (depthFactor * depthScale);
+            (child as any).scale.set(Math.max(0.1, s));
         }
 
         if (enableZIndex && (child as any).zIndex !== undefined) {
             (child as any).zIndex = Math.floor(depthFactor * 1000);
         }
-
-        child.position.set(finalX, finalY);
 
         if (typeof child.rotation !== 'undefined') {
             if (rotation !== 'none') {
@@ -1504,7 +1516,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     const placedComponentSet = new Set<LayoutComponent>();
     const usedSlotSet = new Set<string>();
 
-    if (prioritizeCorners && columns > 1 && effectiveRows > 1) {
+    if (!excludeCorners && prioritizeCorners && columns > 1 && effectiveRows > 1) {
         const cornerSlots = [
             { r: 0, c: 0 },
             { r: 0, c: columns - 1 },
@@ -1524,7 +1536,6 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         cornerSlots.forEach((cornerSlot, i) => {
             if (i >= componentsToPlaceInCorners.length) return;
             const component = componentsToPlaceInCorners[i];
-
             placeChild(component, cornerSlot);
             placedComponentSet.add(component);
             usedSlotSet.add(`${cornerSlot.r},${cornerSlot.c}`);
@@ -1550,16 +1561,6 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
                 placeChild(child, slotsForDistribution[slotIndex]);
             }
         });
-    }
-
-    if (cornerOffset > 0) {
-        const bounds = _calculateBoundsFromComponents(stableComponents, options);
-        return {
-            minX: bounds.minX - cornerOffset,
-            minY: bounds.minY - cornerOffset,
-            maxX: bounds.maxX + cornerOffset,
-            maxY: bounds.maxY + cornerOffset
-        };
     }
 
     return _calculateBoundsFromComponents(stableComponents, options);
