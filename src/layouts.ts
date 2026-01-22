@@ -1379,7 +1379,6 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     } = options as any;
 
     const prioritizeCorners = options.prioritizeCorners || !!cornerSortBy;
-
     let stableComponents = components;
     if (enableZIndex && !cornerSortBy) {
         stableComponents = [...components].sort((a: any, b: any) => {
@@ -1394,21 +1393,26 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
 
     let effectiveRows = rows;
     if (autoRows) {
-        if (columns === 1) {
-            effectiveRows = numComponents;
-        } else if (numComponents <= columns) {
-            effectiveRows = 1;
-        } else if (numComponents <= 2 * columns) {
-            effectiveRows = 2;
-        } else {
-            effectiveRows = Math.ceil((numComponents - 2 * columns + 4) / 2);
+        if (excludeCorners) {
+            const colTerm = Math.max(2, columns);
+            effectiveRows = Math.ceil((numComponents - 2 * colTerm + 8) / 2);
             effectiveRows = Math.max(2, effectiveRows);
+        } else {
+            if (columns === 1) {
+                effectiveRows = numComponents;
+            } else if (numComponents <= columns) {
+                effectiveRows = 1;
+            } else {
+                effectiveRows = Math.ceil((numComponents - 2 * columns + 4) / 2);
+                effectiveRows = Math.max(2, effectiveRows);
+            }
         }
     }
 
     if (effectiveRows <= 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
     const { cellWidth, cellHeight, maxChildWidth, maxChildHeight } = _calculateGridCellSize(stableComponents, options);
+
     const topPath = Array.from({ length: columns }, (_, i) => ({ r: 0, c: i }));
     const rightPath = Array.from({ length: effectiveRows - 1 }, (_, i) => ({ r: i + 1, c: columns - 1 }));
     const bottomPath = Array.from({ length: columns - 1 }, (_, i) => ({ r: effectiveRows - 1, c: columns - 2 - i }));
@@ -1436,11 +1440,9 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     if (startCorner === 'top-right') startIndex = canonicalPath.findIndex(p => p.r === 0 && p.c === columns - 1);
     else if (startCorner === 'bottom-right') startIndex = canonicalPath.findIndex(p => p.r === effectiveRows - 1 && p.c === columns - 1);
     else if (startCorner === 'bottom-left') startIndex = canonicalPath.findIndex(p => p.r === effectiveRows - 1 && p.c === 0);
-
     startIndex = Math.max(0, startIndex);
 
     let perimeterSlots = [...canonicalPath.slice(startIndex), ...canonicalPath.slice(0, startIndex)];
-
     if (direction === 'counter-clockwise') {
         const first = perimeterSlots.shift();
         perimeterSlots.reverse();
@@ -1466,7 +1468,6 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
             const isBottom = slot.r === effectiveRows - 1;
             const isLeft = slot.c === 0;
             const isRight = slot.c === columns - 1;
-
             if (isTop && isLeft) { x -= cornerOffset; y -= cornerOffset; }
             else if (isTop && isRight) { x += cornerOffset; y -= cornerOffset; }
             else if (isBottom && isRight) { x += cornerOffset; y += cornerOffset; }
@@ -1498,11 +1499,9 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
             const s = 1 + (depthFactor * depthScale);
             (child as any).scale.set(Math.max(0.1, s));
         }
-
         if (enableZIndex && (child as any).zIndex !== undefined) {
             (child as any).zIndex = Math.floor(depthFactor * 1000);
         }
-
         if (typeof child.rotation !== 'undefined') {
             if (rotation !== 'none') {
                 const angle = Math.atan2(rotY, rotX);
@@ -1550,12 +1549,9 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
 
     if (numRemainingComponents > 0 && numRemainingSlots > 0) {
         componentsForDistribution.forEach((child, i) => {
-            let slotIndex: number;
-            if (distribution === 'packed') {
-                slotIndex = i;
-            } else {
-                slotIndex = Math.floor(i * (numRemainingSlots / numRemainingComponents));
-            }
+            let slotIndex = distribution === 'packed'
+                ? i
+                : Math.floor(i * (numRemainingSlots / numRemainingComponents));
 
             if (slotIndex < numRemainingSlots) {
                 placeChild(child, slotsForDistribution[slotIndex]);
