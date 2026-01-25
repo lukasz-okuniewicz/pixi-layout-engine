@@ -192,4 +192,14 @@ export interface LayoutOptions {
     orientation?: Orientation;
     portrait?: Partial<Omit<LayoutOptions, 'portrait' | 'landscape'>>;
     landscape?: Partial<Omit<LayoutOptions, 'portrait' | 'landscape'>>;
+    /** Number of concentric orbits (rings). Used by orbit layout. */
+    orbitCount?: number;
+    /** Radial distance between orbits. Used by orbit layout. */
+    orbitSpacing?: number;
+    /** Angular offset in degrees added per orbit for stagger. Used by orbit layout. */
+    orbitPhase?: number;
+    /** Vertical distance between rungs (pairs of items). Used by DNA layout. */
+    dnaPitch?: number;
+    /** Degrees of twist per rung along the helix. Used by DNA layout. */
+    dnaTwist?: number;
 }

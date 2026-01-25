@@ -72,7 +72,8 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
         [layoutEnum.PAYOUT_ZONES]: _layoutPayoutZones,
         [layoutEnum.SPREAD_EXPLOSION]: _layoutSpreadExplosion,
         [layoutEnum.PYRAMID]: _layoutPyramid,
-        [layoutEnum.REELS]: _layoutReels,
+        [layoutEnum.ORBIT]: _layoutOrbit,
+        [layoutEnum.DNA]: _layoutDna,
         [layoutEnum.REEL_SPINNER]: _layoutReelSpinner,
     };
 
@@ -2756,69 +2757,110 @@ const _layoutSquareDiagonalFill = (components: LayoutComponent[], options: Layou
 };
 
 /**
- * Arranges components in vertical "reels" (columns).
- * Elements in each reel are stacked from the bottom-up (Gravity).
- * If an element is removed from the middle of the array, elements above it
- * will "drop" down to fill the gap in the next layout pass.
+ * Arranges components on concentric circular orbits (rings), like a solar system.
+ * Items are distributed round-robin across orbits. Each orbit is staggered by `orbitPhase`
+ * degrees for a balanced look. Great for character select, power-ups, or orbital menus.
  *
  * @private
+ * @param {LayoutComponent[]} components - The components to arrange.
+ * @param {LayoutOptions} options - Uses `radius`, `orbitCount`, `orbitSpacing`, `orbitPhase`, `startAngle`, `rotateToCenter`, `rotationOffset`.
+ * @returns {Bounds} The calculated bounds of the layout.
  */
-const _layoutReels = (components: LayoutComponent[], options: LayoutOptions): Bounds => {
+const _layoutOrbit = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+
+    const { maxChildWidth, maxChildHeight } = _calculateGridCellSize(components, options);
+    const baseGap = Math.max(maxChildWidth || 50, maxChildHeight || 50, 40);
+
     const {
-        columns = 5,
-        justifyItems = 'center',
-        alignItems = 'end',
-        stagger = 0,
+        radius = 80,
+        orbitCount = 3,
+        orbitSpacing = baseGap + 20,
+        orbitPhase,
+        startAngle = 0,
+        rotateToCenter = false,
+        rotationOffset = 0,
     } = options as any;
 
-    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    const startRad = toRad(startAngle);
+    const phasePerOrbit = orbitPhase !== undefined ? toRad(orbitPhase) : (2 * Math.PI / Math.max(1, orbitCount));
 
-    const { cellWidth, cellHeight, maxChildWidth, maxChildHeight, columnGap, rowGap } = _calculateGridCellSize(components, options);
+    for (let k = 0; k < orbitCount; k++) {
+        const countOnOrbit = Math.ceil((total - k) / orbitCount);
+        if (countOnOrbit <= 0) continue;
 
-    const reels: LayoutComponent[][] = Array.from({ length: columns }, () => []);
+        const orbitRadius = radius + k * orbitSpacing;
+        const angleStep = (2 * Math.PI) / countOnOrbit;
+        const orbitStart = startRad + k * phasePerOrbit;
 
-    components.forEach((child, i) => {
-        const rIndex = (child as any).reelIndex !== undefined
-            ? (child as any).reelIndex % columns
-            : i % columns;
-        reels[rIndex].push(child);
-    });
+        for (let j = 0; j < countOnOrbit; j++) {
+            const i = k + j * orbitCount;
+            if (i >= total) break;
 
-    const maxItemsInAnyReel = Math.max(...reels.map(r => r.length));
+            const child = components[i];
+            const angle = orbitStart + j * angleStep;
+            const x = orbitRadius * Math.cos(angle);
+            const y = orbitRadius * Math.sin(angle);
+            child.position.set(x, y);
 
-    reels.forEach((reel, colIndex) => {
-        const reelStagger = colIndex * stagger;
-
-        reel.forEach((child, rowIndex) => {
-            const useFixed = options.sizingMode === 'fixed';
-            const childWidth = useFixed ? (options.fixedWidth ?? 0) : child.width;
-            const childHeight = useFixed ? (options.fixedHeight ?? 0) : child.height;
-
-            const xBase = colIndex * cellWidth;
-            let childX: number;
-            switch (justifyItems) {
-                case 'start': childX = xBase + childWidth / 2; break;
-                case 'end':   childX = xBase + maxChildWidth - childWidth / 2; break;
-                default:      childX = xBase + maxChildWidth / 2; break;
+            if (rotateToCenter && typeof child.rotation !== 'undefined') {
+                child.rotation = angle + Math.PI / 2 + toRad(rotationOffset);
+            } else if (typeof child.rotation !== 'undefined') {
+                child.rotation = 0;
             }
+        }
+    }
 
-            let childY: number;
-            if (alignItems === 'start') {
-                childY = (rowIndex * cellHeight) + childHeight / 2 + reelStagger;
-            } else {
-                const visualRow = (maxItemsInAnyReel - 1) - rowIndex;
-                childY = (visualRow * cellHeight) + maxChildHeight - childHeight / 2 + reelStagger;
-            }
+    return _calculateBoundsFromComponents(components, options);
+};
 
-            child.position.set(childX, childY);
-        });
-    });
+/**
+ * Arranges components in a double-helix (DNA) pattern: two intertwining strands,
+ * items alternating between them. Each "rung" has one item on each strand at the
+ * same height; the strands twist as they go. Uses `radius`, `dnaPitch`, `dnaTwist`, `startAngle`.
+ *
+ * @private
+ * @param {LayoutComponent[]} components - The components to arrange.
+ * @param {LayoutOptions} options - Uses `radius`, `dnaPitch`, `dnaTwist`, `startAngle`, `rotateToCenter`, `rotationOffset`.
+ * @returns {Bounds} The calculated bounds of the layout.
+ */
+const _layoutDna = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
-    return {
-        minX: 0, minY: 0,
-        maxX: columns * cellWidth - columnGap,
-        maxY: maxItemsInAnyReel * cellHeight - rowGap + ((columns - 1) * stagger)
-    };
+    const {
+        radius = 100,
+        dnaPitch = 60,
+        dnaTwist = 60,
+        startAngle = 0,
+        rotateToCenter = false,
+        rotationOffset = 0,
+    } = options as any;
+
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    const maxK = Math.floor((total - 1) / 2);
+    const centerK = maxK / 2;
+
+    for (let i = 0; i < total; i++) {
+        const k = Math.floor(i / 2);
+        const strand = i % 2;
+        const angleRad = toRad(startAngle + k * dnaTwist);
+        const y = (k - centerK) * dnaPitch;
+        const x = (strand === 0 ? 1 : -1) * radius * Math.cos(angleRad);
+
+        const child = components[i];
+        child.position.set(x, y);
+
+        if (rotateToCenter && typeof child.rotation !== 'undefined') {
+            child.rotation = Math.atan2(0, -x) + toRad(rotationOffset);
+        } else if (typeof child.rotation !== 'undefined') {
+            child.rotation = 0;
+        }
+    }
+
+    return _calculateBoundsFromComponents(components, options);
 };
 
 /**

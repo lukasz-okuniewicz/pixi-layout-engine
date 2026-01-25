@@ -21,6 +21,7 @@ export const layoutEnum = {
     PAYOUT_ZONES: "payout-zones",
     SPREAD_EXPLOSION: "spread-explosion",
     PYRAMID: "pyramid",
-    REELS: 'reels',
+    ORBIT: "orbit",
+    DNA: "dna",
     REEL_SPINNER: "REEL_SPINNER",
 } as const;
