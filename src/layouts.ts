@@ -1377,6 +1377,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         overflowAlignment = 'start',   
         equalDistribution = false,     
         cornerOffset = 0,
+        offset = 0, // RESTORED: General radial offset
         globalRotation = 0,
         perspectiveY = 1,
         depthScale = 0,
@@ -1408,7 +1409,6 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         isPrimary: boolean;
     }
 
-    // Explicitly typing the return to avoid 'never[]' inference errors
     const createSeg = (name: string, isPrimary: boolean): EdgeSegment => ({ 
         name, 
         slots: [], 
@@ -1421,14 +1421,12 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
 
     // 2. Define Segment Buckets
     if (priorityDirection === 'rows') {
-        // Vertical edges (Left/Right) are Primary and get the corners
         const left = createSeg('left', true);
         const right = createSeg('right', true);
         for (let r = 0; r <= maxR; r++) {
             left.slots.push({ r, c: 0 });
             right.slots.push({ r, c: maxC });
         }
-        // Horizontal edges (Top/Bottom) are Secondary and get middle slots
         const top = createSeg('top', false);
         const bottom = createSeg('bottom', false);
         for (let c = 1; c < maxC; c++) {
@@ -1438,14 +1436,12 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         primarySegs.push(left, right);
         secondarySegs.push(top, bottom);
     } else {
-        // Horizontal edges (Top/Bottom) are Primary and get the corners
         const top = createSeg('top', true);
         const bottom = createSeg('bottom', true);
         for (let c = 0; c <= maxC; c++) {
             top.slots.push({ r: 0, c });
             bottom.slots.push({ r: maxR, c });
         }
-        // Vertical edges (Left/Right) are Secondary and get middle slots
         const left = createSeg('left', false);
         const right = createSeg('right', false);
         for (let r = 1; r < maxR; r++) {
@@ -1469,13 +1465,10 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
     const totalPrimarySlots = primarySegs.reduce((sum, s) => sum + s.slots.length, 0);
 
     if (remaining >= totalPrimarySlots) {
-        // Fill Primary edges completely
         primarySegs.forEach(s => {
             s.countToFill = s.slots.length;
             remaining -= s.countToFill;
         });
-
-        // Distribute remaining equally among Secondary edges
         if (equalDistribution && secondarySegs.length > 0) {
             const perSeg = Math.floor(remaining / secondarySegs.length);
             let extra = remaining % secondarySegs.length;
@@ -1492,7 +1485,6 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
             });
         }
     } else {
-        // Not enough to fill primary, distribute among primary edges equally
         if (equalDistribution) {
             const perSeg = Math.floor(remaining / primarySegs.length);
             let extra = remaining % primarySegs.length;
@@ -1543,7 +1535,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         componentIdx += take;
     });
 
-    // 6. Geometry & Rendering
+    // 6. Geometry & Rendering (Updated with Offset)
     const { cellWidth, cellHeight, maxChildWidth, maxChildHeight } = _calculateGridCellSize(components, options);
     const gridWidth = maxC * cellWidth + maxChildWidth;
     const gridHeight = maxR * cellHeight + maxChildHeight;
@@ -1557,6 +1549,7 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
         let x = slot.c * cellWidth + maxChildWidth / 2;
         let y = slot.r * cellHeight + maxChildHeight / 2;
 
+        // Apply Corner Offset (per-corner adjustment)
         if (cornerOffset !== 0) {
             const isT = slot.r === 0; const isB = slot.r === maxR;
             const isL = slot.c === 0; const isR = slot.c === maxC;
@@ -1566,12 +1559,27 @@ const _layoutPerimeterGrid = (components: LayoutComponent[], options: LayoutOpti
             else if (isB && isL) { x -= cornerOffset; y += cornerOffset; }
         }
 
-        const dx = x - centerX;
-        const dy = y - centerY;
-        child.position.set(dx * cosRot - dy * sinRot, (dx * sinRot + dy * cosRot) * perspectiveY);
+        // Relative to logical center
+        let dx = x - centerX;
+        let dy = y - centerY;
+
+        // RESTORED: General radial offset
+        if (offset !== 0) {
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0) {
+                dx += (dx / dist) * offset;
+                dy += (dy / dist) * offset;
+            }
+        }
+
+        // Apply global rotation and perspective
+        const rotX = dx * cosRot - dy * sinRot;
+        const rotY = (dx * sinRot + dy * cosRot) * perspectiveY;
+
+        child.position.set(rotX, rotY);
 
         if (enableZIndex || depthScale !== 0) {
-            const depthFactor = child.position.y / (gridHeight / 2 || 1);
+            const depthFactor = rotY / (gridHeight / 2 || 1);
             if (enableZIndex && (child as any).zIndex !== undefined) {
                 (child as any).zIndex = Math.floor(depthFactor * 1000);
             }
