@@ -31,6 +31,7 @@ export interface LayoutComponent {
     rowSpan?: number;
     visible?: boolean;
     zoneName?: string;
+    category?: string;
     tint?: number;
     stretch?: number;
 }
@@ -210,4 +211,29 @@ export interface LayoutOptions {
     dnaPitch?: number;
     /** Degrees of twist per rung along the helix. Used by DNA layout. */
     dnaTwist?: number;
+    ringCount?: number;
+    ringSpacing?: number;
+    ringPhase?: number;
+    branchingFactor?: number;
+    hTreeDepth?: number;
+    hTreeSpacing?: number;
+    fisheyeFocus?: number;
+    fisheyeScale?: number;
+    fisheyeSpread?: number;
+    fanCurvature?: number;
+    coverFlowCenter?: number;
+    coverFlowSkew?: number;
+    coverFlowDepth?: number;
+    categoryProperty?: string;
+    reelHeights?: number[];
+    fixedColumnHeight?: number;
+    jitter?: number;
+    tumbleIntensity?: number;
+    perspectiveScale?: number;
+    cellHighlightIndices?: number[];
+    cellHighlightOffset?: number;
+    tableCurvature?: number;
+    stackLeaning?: number;
+    chipStackOffsetY?: number;
+    rouletteSlots?: { row: number; col: number; rowSpan: number; colSpan: number }[];
 }

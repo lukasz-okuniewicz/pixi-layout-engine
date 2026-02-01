@@ -1,6 +1,6 @@
 {
   "name": "pixi-layout-engine",
-  "version": "2.12.1",
+  "version": "2.13.0",
   "description": "A powerful, pixi.js layout engine for arranging objects in 2D space. Provides 20+ advanced layouts like grids, circles, spirals, masonry, treemaps, and more. Ideal for game development, data visualization, and complex UI.",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

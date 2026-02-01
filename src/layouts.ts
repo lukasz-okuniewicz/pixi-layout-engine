@@ -75,6 +75,21 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
         [layoutEnum.ORBIT]: _layoutOrbit,
         [layoutEnum.DNA]: _layoutDna,
         [layoutEnum.REEL_SPINNER]: _layoutReelSpinner,
+        [layoutEnum.CONCENTRIC_RINGS]: _layoutConcentricRings,
+        [layoutEnum.SUNFLOWER]: _layoutSunflower,
+        [layoutEnum.H_TREE]: _layoutHTree,
+        [layoutEnum.FISHEYE]: _layoutFisheye,
+        [layoutEnum.CIRCULAR_FAN]: _layoutCircularFan,
+        [layoutEnum.PERSPECTIVE_STACK]: _layoutPerspectiveStack,
+        [layoutEnum.CIRCLE_PACK_GROUPED]: _layoutCirclePackGrouped,
+        [layoutEnum.MEGAWAYS]: _layoutMegaways,
+        [layoutEnum.DIAMOND_REEL]: _layoutDiamondReel,
+        [layoutEnum.KENO_80_GRID]: _layoutKeno80Grid,
+        [layoutEnum.RADIAL_BALL_TUMBLER]: _layoutRadialBallTumbler,
+        [layoutEnum.PRIZE_LADDER]: _layoutPrizeLadder,
+        [layoutEnum.ROULETTE_BETTING_MAT]: _layoutRouletteBettingMat,
+        [layoutEnum.SEMICIRCLE_SEATING]: _layoutSemicircleSeating,
+        [layoutEnum.CHIP_STACK]: _layoutChipStack,
     };
 
     let bounds: Bounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
@@ -83,6 +98,16 @@ const applyLayout = (container: LayoutContainer, options: LayoutOptions = {}): v
     } else {
         console.warn(`Layout "${layoutName}" not found. Defaulting to horizontal.`);
         bounds = _layoutLine(componentsToLayout, { ...finalOptions, isVertical: false });
+    }
+    const jitter = finalOptions.jitter ?? 0;
+    if (jitter > 0) {
+        for (const child of componentsToLayout) {
+            child.position.set(
+                child.position.x + (Math.random() - 0.5) * 2 * jitter,
+                child.position.y + (Math.random() - 0.5) * 2 * jitter
+            );
+        }
+        bounds = _calculateBoundsFromComponents(componentsToLayout, finalOptions);
     }
     const layoutWidth = bounds.maxX - bounds.minX;
     const layoutHeight = bounds.maxY - bounds.minY;
@@ -2188,6 +2213,111 @@ const _layoutStack = (components: LayoutComponent[], options: LayoutOptions = {}
     return _calculateBoundsFromComponents(components, options);
 };
 
+const _defaultRouletteSlots = (): { row: number; col: number; rowSpan: number; colSpan: number }[] => {
+    const slots: { row: number; col: number; rowSpan: number; colSpan: number }[] = [];
+    slots.push({ row: 0, col: 0, rowSpan: 1, colSpan: 1 });
+    for (let c = 1; c <= 3; c++) slots.push({ row: 0, col: c, rowSpan: 3, colSpan: 1 });
+    for (let r = 1; r <= 3; r++) for (let c = 0; c <= 2; c++) slots.push({ row: r, col: c, rowSpan: 1, colSpan: 1 });
+    return slots;
+};
+
+const _layoutRouletteBettingMat = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const { alignItems = 'center', justifyItems = 'center', rouletteSlots } = options;
+    const slots = rouletteSlots && rouletteSlots.length > 0 ? rouletteSlots : _defaultRouletteSlots();
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const { cellWidth, cellHeight, columnGap, rowGap } = _calculateGridCellSize(components, options);
+    const useFixed = options.sizingMode === 'fixed';
+    const fixedWidth = options.fixedWidth ?? 0;
+    const fixedHeight = options.fixedHeight ?? 0;
+    for (let i = 0; i < components.length; i++) {
+        const child = components[i];
+        const slot = slots[i % slots.length];
+        const childWidth = useFixed ? fixedWidth : child.width;
+        const childHeight = useFixed ? fixedHeight : child.height;
+        const spannedWidth = slot.colSpan * cellWidth - columnGap;
+        const spannedHeight = slot.rowSpan * cellHeight - rowGap;
+        const cellX = slot.col * cellWidth;
+        const cellY = slot.row * cellHeight;
+        let cx: number;
+        let cy: number;
+        switch (justifyItems) {
+            case 'end': cx = cellX + spannedWidth - childWidth / 2; break;
+            case 'center': cx = cellX + spannedWidth / 2; break;
+            default: cx = cellX + childWidth / 2; break;
+        }
+        switch (alignItems) {
+            case 'end': cy = cellY + spannedHeight - childHeight / 2; break;
+            case 'center': cy = cellY + spannedHeight / 2; break;
+            default: cy = cellY + childHeight / 2; break;
+        }
+        child.position.set(cx, cy);
+    }
+    const maxCol = Math.max(...slots.map(s => s.col + s.colSpan), 0);
+    const maxRow = Math.max(...slots.map(s => s.row + s.rowSpan), 0);
+    const w = maxCol * cellWidth - columnGap;
+    const h = maxRow * cellHeight - rowGap;
+    return { minX: 0, minY: 0, maxX: w, maxY: h };
+};
+
+const _layoutSemicircleSeating = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const {
+        radius = 200,
+        tableCurvature = 1,
+        rotateToCenter = true,
+        startAngle = 0,
+        endAngle = 180,
+    } = options as any;
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    const startRad = toRad(startAngle);
+    const endRad = toRad(endAngle);
+    const totalAngle = endRad - startRad;
+    const n = components.length;
+    const dealerX = 0;
+    const dealerY = -radius * 0.3;
+    for (let i = 0; i < n; i++) {
+        const t = n <= 1 ? 0.5 : i / (n - 1);
+        const angle = startRad + t * totalAngle;
+        const a = radius;
+        const b = radius * tableCurvature;
+        const x = a * Math.cos(angle);
+        const y = b * Math.sin(angle);
+        components[i].position.set(x, y);
+        if (rotateToCenter && typeof components[i].rotation !== 'undefined') {
+            const faceAngle = Math.atan2(dealerY - y, dealerX - x);
+            components[i].rotation = faceAngle + Math.PI / 2;
+        }
+    }
+    const extentX = radius * Math.max(Math.abs(Math.cos(startRad)), Math.abs(Math.cos(endRad)));
+    const extentY = radius * tableCurvature * Math.max(Math.abs(Math.sin(startRad)), Math.abs(Math.sin(endRad)));
+    return { minX: -extentX, minY: -extentY, maxX: extentX, maxY: extentY };
+};
+
+const _layoutChipStack = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const {
+        offsetX = 0.5,
+        offsetY = 0.5,
+        chipStackOffsetY,
+        stackLeaning = 0,
+        offsetRotation = 0.5,
+    } = options as any;
+    const dy = chipStackOffsetY ?? 2;
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    const tiltSeed = (i: number) => ((i * 9301 + 49297) % 233280) / 233280;
+    components.forEach((child, i) => {
+        const lean = i * stackLeaning;
+        const jitterX = (tiltSeed(i) - 0.5) * 4;
+        const jitterRot = (tiltSeed(i + 100) - 0.5) * toRad(offsetRotation * 2);
+        const x = i * offsetX + lean + jitterX;
+        const y = i * dy;
+        child.position.set(x, y);
+        if (typeof child.rotation !== 'undefined') child.rotation = jitterRot;
+        if ((child as any).zIndex !== undefined) (child as any).zIndex = i;
+    });
+    return _calculateBoundsFromComponents(components, options);
+};
+
 /**
  * Places components within predefined rectangular zones based on a `zoneName` property.
  * Can apply a sub-layout (e.g., 'square') within each zone.
@@ -2862,6 +2992,71 @@ const _layoutDna = (components: LayoutComponent[], options: LayoutOptions = {}):
  * @param {LayoutOptions} options - Configuration.
  * Uses `spinDegrees`, `radius`, `itemAngleStep`, and `perspective`.
  */
+const _layoutReelGrid = (
+    components: LayoutComponent[],
+    options: LayoutOptions,
+    opts: { scaleToColumnHeight?: boolean; gravityOffset?: number; defaultReelHeights?: number[] }
+): Bounds => {
+    const { scaleToColumnHeight = false, gravityOffset = 0, defaultReelHeights = [4, 4, 4, 4, 4] } = opts;
+    const reelHeights = options.reelHeights && options.reelHeights.length > 0 ? options.reelHeights : defaultReelHeights;
+    const columnGap = options.columnGap ?? options.spacing ?? 0;
+    const rowGap = options.rowGap ?? options.spacing ?? 0;
+    const fixedColumnHeight = options.fixedColumnHeight ?? (scaleToColumnHeight ? 320 : undefined);
+    const useFixed = options.sizingMode === "fixed";
+    const fixedWidth = options.fixedWidth ?? 0;
+    const fixedHeight = options.fixedHeight ?? 0;
+    let maxChildWidth = 0;
+    let maxChildHeight = 0;
+    for (const child of components) {
+        const w = useFixed ? fixedWidth : child.width;
+        const h = useFixed ? fixedHeight : child.height;
+        if (w > maxChildWidth) maxChildWidth = w;
+        if (h > maxChildHeight) maxChildHeight = h;
+    }
+    const cellWidth = maxChildWidth + columnGap;
+    const cellHeight = maxChildHeight + rowGap;
+    const numColumns = reelHeights.length;
+    let globalIdx = 0;
+    let maxX = 0;
+    let maxY = 0;
+    for (let c = 0; c < numColumns && globalIdx < components.length; c++) {
+        const count = Math.min(reelHeights[c] ?? 0, components.length - globalIdx);
+        if (count <= 0) continue;
+        const colHeight = scaleToColumnHeight && fixedColumnHeight
+            ? fixedColumnHeight
+            : count * cellHeight - rowGap;
+        const slotHeight = (colHeight - (count - 1) * rowGap) / count;
+        const scaleY = scaleToColumnHeight && fixedColumnHeight && maxChildHeight > 0 ? slotHeight / maxChildHeight : 1;
+        const x = c * cellWidth + maxChildWidth / 2;
+        for (let r = 0; r < count; r++) {
+            const child = components[globalIdx++];
+            const y = r * (slotHeight + rowGap) + slotHeight / 2 + r * gravityOffset;
+            child.position.set(x, y);
+            if ((child as any).scale && scaleY !== 1) {
+                const sx = (child as any).scale.x ?? 1;
+                (child as any).scale.set(sx, scaleY);
+            }
+            const bottom = y + (scaleY !== 1 ? slotHeight / 2 : maxChildHeight / 2);
+            if (bottom > maxY) maxY = bottom;
+        }
+        const right = x + maxChildWidth / 2;
+        if (right > maxX) maxX = right;
+    }
+    const totalWidth = numColumns * cellWidth - columnGap;
+    return { minX: 0, minY: 0, maxX: totalWidth, maxY };
+};
+
+const _layoutMegaways = (components: LayoutComponent[], options: LayoutOptions): Bounds => {
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    return _layoutReelGrid(components, options, { scaleToColumnHeight: true, defaultReelHeights: [4, 4, 4, 4, 4] });
+};
+
+const _layoutDiamondReel = (components: LayoutComponent[], options: LayoutOptions): Bounds => {
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const reelHeights = options.reelHeights && options.reelHeights.length > 0 ? options.reelHeights : [3, 4, 5, 4, 3];
+    return _layoutReelGrid(components, { ...options, reelHeights }, { scaleToColumnHeight: false });
+};
+
 const _layoutReelSpinner = (components: LayoutComponent[], options: LayoutOptions): Bounds => {
     const {
         spinDegrees = 0,
@@ -2914,6 +3109,362 @@ const _layoutReelSpinner = (components: LayoutComponent[], options: LayoutOption
         minY: -height / 2,
         maxY: height / 2
     };
+};
+
+const _layoutConcentricRings = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const { maxChildWidth, maxChildHeight } = _calculateGridCellSize(components, options);
+    const baseGap = Math.max(maxChildWidth || 50, maxChildHeight || 50, 40);
+    const {
+        radius = 80,
+        ringCount = 3,
+        ringSpacing = baseGap + 20,
+        ringPhase = 0,
+        startAngle = 0,
+        rotateToCenter = false,
+        rotationOffset = 0,
+    } = options as any;
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    const startRad = toRad(startAngle);
+    const phasePerRing = toRad(ringPhase);
+    let idx = 0;
+    for (let k = 0; k < ringCount; k++) {
+        const countOnRing = Math.ceil((total - idx) / (ringCount - k));
+        if (countOnRing <= 0) break;
+        const ringRadius = radius + k * ringSpacing;
+        const angleStep = (2 * Math.PI) / countOnRing;
+        const ringStart = startRad + k * phasePerRing;
+        for (let j = 0; j < countOnRing && idx < total; j++) {
+            const child = components[idx++];
+            const angle = ringStart + j * angleStep;
+            const x = ringRadius * Math.cos(angle);
+            const y = ringRadius * Math.sin(angle);
+            child.position.set(x, y);
+            if (rotateToCenter && typeof child.rotation !== 'undefined') {
+                child.rotation = angle + Math.PI / 2 + toRad(rotationOffset);
+            } else if (typeof child.rotation !== 'undefined') {
+                child.rotation = 0;
+            }
+        }
+    }
+    return _calculateBoundsFromComponents(components, options);
+};
+
+const _layoutSunflower = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const spacing = (options.spacing ?? 8) as number;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const radiusScale = (options.radiusScale ?? 1) as number;
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const sorted = [...components].sort((a, b) => ((a.value ?? 1) - (b.value ?? 1)));
+    let areaUsed = 0;
+    sorted.forEach((child, i) => {
+        const r = Math.sqrt(child.value ?? 10) * radiusScale;
+        areaUsed += Math.PI * r * r;
+        const dist = Math.sqrt(areaUsed / Math.PI);
+        const theta = i * goldenAngle;
+        const x = dist * Math.cos(theta);
+        const y = dist * Math.sin(theta);
+        child.position.set(x, y);
+    });
+    return _calculateBoundsFromComponents(components, options);
+};
+
+const _layoutHTree = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const branchingFactor = Math.max(2, (options.branchingFactor as number) ?? 2);
+    const depth = Math.max(1, (options.hTreeDepth as number) ?? 4);
+    const spacing = (options.hTreeSpacing as number) ?? 80;
+    const maxLeaves = Math.pow(branchingFactor, depth);
+    const positions: { x: number; y: number }[] = [];
+    const walk = (d: number, cx: number, cy: number, halfLen: number) => {
+        if (d >= depth) {
+            positions.push({ x: cx, y: cy });
+            return;
+        }
+        const nextHalf = halfLen / 2;
+        const step = halfLen;
+        for (let b = 0; b < branchingFactor; b++) {
+            const t = (b - (branchingFactor - 1) / 2) / Math.max(1, (branchingFactor - 1) / 2);
+            const nx = cx + step * (1 - Math.abs(t));
+            const ny = cy + step * t;
+            walk(d + 1, nx, ny, nextHalf);
+        }
+    };
+    const initialLen = spacing * Math.pow(2, depth - 1);
+    walk(0, 0, 0, initialLen);
+    for (let i = 0; i < total; i++) {
+        const p = positions[i % positions.length];
+        components[i].position.set(p.x, p.y);
+    }
+    return _calculateBoundsFromComponents(components, options);
+};
+
+const _layoutFisheye = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const { maxChildWidth, maxChildHeight } = _calculateGridCellSize(components, options);
+    const cellW = maxChildWidth || 50;
+    const focusIndex = Math.min(total - 1, Math.max(0, (options.fisheyeFocus as number) ?? Math.floor(total / 2)));
+    const scaleFactor = (options.fisheyeScale as number) ?? 1.5;
+    const spreadFactor = (options.fisheyeSpread as number) ?? 1.8;
+    const baseSpacing = cellW + 10;
+    const getSpacing = (i: number) => {
+        const dist = Math.abs(i - focusIndex);
+        const maxDist = Math.max(focusIndex, total - 1 - focusIndex, 1);
+        const t = dist / maxDist;
+        return baseSpacing * (1 + (spreadFactor - 1) * (1 - t));
+    };
+    const getScale = (i: number) => {
+        const dist = Math.abs(i - focusIndex);
+        const maxDist = Math.max(focusIndex, total - 1 - focusIndex, 1);
+        const t = dist / maxDist;
+        return 1 + (scaleFactor - 1) * (1 - t);
+    };
+    let xLeft = 0;
+    for (let i = focusIndex - 1; i >= 0; i--) {
+        const spacing = getSpacing(i);
+        xLeft -= spacing;
+        const c = components[i];
+        if (c) {
+            c.position.set(xLeft, 0);
+            if (c.scale) c.scale.set(getScale(i), getScale(i));
+        }
+    }
+    const focusChild = components[focusIndex];
+    if (focusChild) {
+        focusChild.position.set(0, 0);
+        if (focusChild.scale) focusChild.scale.set(scaleFactor, scaleFactor);
+    }
+    let xRight = 0;
+    for (let i = focusIndex + 1; i < total; i++) {
+        const spacing = getSpacing(i);
+        xRight += spacing;
+        const c = components[i];
+        if (c) {
+            c.position.set(xRight, 0);
+            if (c.scale) c.scale.set(getScale(i), getScale(i));
+        }
+    }
+    return _calculateBoundsFromComponents(components, options);
+};
+
+const _layoutCircularFan = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const arcRadius = (options.arcRadius ?? 300) as number;
+    const arcAngle = (options.arcAngle ?? 60) as number;
+    const fanCurvature = (options.fanCurvature ?? 1) as number;
+    const toRad = (deg: number) => deg * (Math.PI / 180);
+    const totalAngleRad = toRad(arcAngle) * fanCurvature;
+    const centerAngle = -Math.PI / 2;
+    const startAngleRad = centerAngle - totalAngleRad / 2;
+    const divisor = total > 1 ? total - 1 : 1;
+    const angleStep = totalAngleRad / divisor;
+    components.forEach((child, i) => {
+        const angle = total === 1 ? centerAngle : startAngleRad + i * angleStep;
+        const r = arcRadius;
+        const x = r * Math.cos(angle);
+        const y = r * Math.sin(angle);
+        child.position.set(x, y);
+        if (typeof child.rotation !== 'undefined') {
+            child.rotation = angle + Math.PI / 2;
+        }
+    });
+    return _calculateBoundsFromComponents(components, options);
+};
+
+const _layoutPerspectiveStack = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const { maxChildWidth, maxChildHeight } = _calculateGridCellSize(components, options);
+    const cellW = maxChildWidth || 60;
+    const cellH = maxChildHeight || 60;
+    const centerIndex = (options.coverFlowCenter as number) ?? Math.floor(total / 2);
+    const skew = (options.coverFlowSkew as number) ?? 0.3;
+    const depthScale = (options.coverFlowDepth as number) ?? 0.85;
+    const spacing = cellW * 0.4;
+    components.forEach((child, i) => {
+        const offset = (i - centerIndex) * spacing;
+        const depth = Math.abs(i - centerIndex);
+        const scale = Math.pow(depthScale, depth);
+        const x = offset + (i - centerIndex) * skew * cellH * 0.5;
+        const y = 0;
+        child.position.set(x, y);
+        if (child.scale) child.scale.set(scale, scale);
+        if ((child as any).zIndex !== undefined) {
+            (child as any).zIndex = centerIndex - Math.abs(i - centerIndex);
+        }
+    });
+    return _calculateBoundsFromComponents(components, options);
+};
+
+const _layoutCirclePackGrouped = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const categoryKey = (options.categoryProperty as string) ?? 'category';
+    const groups = new Map<string, LayoutComponent[]>();
+    components.forEach((c) => {
+        const cat = (c as any)[categoryKey] ?? 'default';
+        if (!groups.has(cat)) groups.set(cat, []);
+        groups.get(cat)!.push(c);
+    });
+    const islandRadius = (options.boundsRadius as number) ?? 150;
+    const padding = (options.padding as number) ?? 5;
+    const iterations = (options.iterations as number) ?? 80;
+    const centerStrength = (options.centerStrength as number) ?? 0.02;
+    const radiusScale = (options.radiusScale as number) ?? 5;
+    const groupCenters: { key: string; x: number; y: number }[] = [];
+    const angleStep = (2 * Math.PI) / Math.max(1, groups.size);
+    Array.from(groups.keys()).forEach((key, i) => {
+        const dist = islandRadius * 1.2;
+        groupCenters.push({
+            key,
+            x: dist * Math.cos(i * angleStep),
+            y: dist * Math.sin(i * angleStep),
+        });
+    });
+    let bounds: Bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    groups.forEach((groupComponents, key) => {
+        const center = groupCenters.find((c) => c.key === key) ?? { x: 0, y: 0 };
+        const nodes = groupComponents.map((c) => ({
+            component: c,
+            radius: Math.sqrt(c.value ?? 10) * radiusScale,
+            x: center.x + (Math.random() - 0.5) * 40,
+            y: center.y + (Math.random() - 0.5) * 40,
+            vx: 0,
+            vy: 0,
+        }));
+        for (let iter = 0; iter < iterations; iter++) {
+            nodes.forEach((nodeA) => {
+                nodeA.vx += (center.x - nodeA.x) * centerStrength;
+                nodeA.vy += (center.y - nodeA.y) * centerStrength;
+                nodes.forEach((nodeB) => {
+                    if (nodeA === nodeB) return;
+                    const dx = nodeB.x - nodeA.x;
+                    const dy = nodeB.y - nodeA.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const minDist = nodeA.radius + nodeB.radius + padding;
+                    if (dist < minDist) {
+                        const angle = Math.atan2(dy, dx);
+                        const tx = nodeA.x + Math.cos(angle) * minDist;
+                        const ty = nodeA.y + Math.sin(angle) * minDist;
+                        const ax = (tx - nodeB.x) * 0.5;
+                        const ay = (ty - nodeB.y) * 0.5;
+                        nodeA.vx -= ax;
+                        nodeA.vy -= ay;
+                        nodeB.vx += ax;
+                        nodeB.vy += ay;
+                    }
+                });
+            });
+            nodes.forEach((n) => {
+                n.x += n.vx;
+                n.y += n.vy;
+                n.vx *= 0.9;
+                n.vy *= 0.9;
+            });
+        }
+        nodes.forEach((n) => {
+            n.component.position.set(n.x, n.y);
+            n.component.width = n.radius * 2;
+            n.component.height = n.radius * 2;
+        });
+        const b = _calculateBoundsFromComponents(groupComponents, options);
+        bounds = {
+            minX: Math.min(bounds.minX, b.minX),
+            minY: Math.min(bounds.minY, b.minY),
+            maxX: Math.max(bounds.maxX, b.maxX),
+            maxY: Math.max(bounds.maxY, b.maxY),
+        };
+    });
+    if (bounds.minX === Infinity) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    return bounds;
+};
+
+const _layoutKeno80Grid = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const columns = (options.columns as number) ?? 10;
+    const rows = (options.rows as number) ?? 8;
+    const cellHighlightIndices = (options.cellHighlightIndices as number[]) ?? [];
+    const cellHighlightOffset = (options.cellHighlightOffset as number) ?? 0;
+    if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const { cellWidth, cellHeight, maxChildWidth, maxChildHeight, columnGap, rowGap } = _calculateGridCellSize(components, options);
+    const gridWidth = columns * cellWidth - columnGap;
+    const gridHeight = rows * cellHeight - rowGap;
+    const centerX = gridWidth / 2;
+    const centerY = gridHeight / 2;
+    components.forEach((child, i) => {
+        const row = Math.floor(i / columns);
+        const col = i % columns;
+        let cellX = col * cellWidth + maxChildWidth / 2;
+        let cellY = row * cellHeight + maxChildHeight / 2;
+        if (cellHighlightIndices.indexOf(i) >= 0 && cellHighlightOffset !== 0) {
+            const dx = cellX - centerX;
+            const dy = cellY - centerY;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            cellX += (dx / len) * cellHighlightOffset;
+            cellY += (dy / len) * cellHighlightOffset;
+        }
+        child.position.set(cellX, cellY);
+    });
+    return { minX: 0, minY: 0, maxX: gridWidth, maxY: gridHeight };
+};
+
+const _layoutRadialBallTumbler = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const radius = (options.radius as number) ?? 120;
+    const tumbleIntensity = (options.tumbleIntensity as number) ?? 0;
+    const goldenAngle = Math.PI * 2 * (1 - 1 / ((1 + Math.sqrt(5)) / 2));
+    const { maxChildWidth, maxChildHeight } = _calculateGridCellSize(components, options);
+    const baseSpacing = Math.max(maxChildWidth ?? 40, maxChildHeight ?? 40, 20) * 0.85;
+    components.forEach((child, i) => {
+        const r = Math.sqrt(i + 1) * baseSpacing;
+        const angle = (i + 1) * goldenAngle;
+        let x = r * Math.cos(angle);
+        let y = r * Math.sin(angle);
+        if (tumbleIntensity > 0) {
+            x += (Math.random() - 0.5) * 2 * tumbleIntensity;
+            y += (Math.random() - 0.5) * 2 * tumbleIntensity;
+        }
+        child.position.set(x, y);
+    });
+    return _calculateBoundsFromComponents(components, options);
+};
+
+const _layoutPrizeLadder = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
+    const total = components.length;
+    if (total === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const perspectiveScale = (options.perspectiveScale as number) ?? 0.6;
+    const rowGap = (options.rowGap as number) ?? 8;
+    const itemSpacing = (options.itemSpacing as number) ?? 6;
+    const { maxChildWidth, maxChildHeight } = _calculateGridCellSize(components, options);
+    const baseHeight = maxChildHeight ?? 50;
+    const baseWidth = maxChildWidth ?? 50;
+    let currentY = 0;
+    const scaleAt = (index: number) => {
+        if (total <= 1) return 1;
+        const t = index / (total - 1);
+        return 1 - t * perspectiveScale;
+    };
+    const gapAt = (index: number) => {
+        if (total <= 1) return rowGap;
+        const t = index / (total - 1);
+        return rowGap * (1 - t * perspectiveScale * 0.8);
+    };
+    for (let i = 0; i < total; i++) {
+        const s = scaleAt(i);
+        const h = baseHeight * s;
+        const w = baseWidth * s;
+        const gap = i === 0 ? 0 : gapAt(i - 1);
+        currentY += gap + h / 2;
+        components[i].position.set(0, currentY);
+        if ((components[i] as any).scale) (components[i] as any).scale.set(s, s);
+        currentY += h / 2;
+    }
+    const maxW = baseWidth * scaleAt(0);
+    const totalHeight = currentY;
+    const halfW = maxW / 2;
+    return { minX: -halfW, maxX: halfW, minY: 0, maxY: totalHeight };
 };
 
 export { applyLayout };
