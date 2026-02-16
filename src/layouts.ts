@@ -3065,6 +3065,7 @@ const _layoutReelSpinner = (components: LayoutComponent[], options: LayoutOption
         depthScale = 0.5,
         stretchStrength = 0,
         vertical = true,
+        reelAlphaFade = false,
         width = 200,
         height = 400
     } = options as any;
@@ -3123,7 +3124,7 @@ const _layoutReelSpinner = (components: LayoutComponent[], options: LayoutOption
         }
 
         if (childAny.alpha !== undefined) {
-            childAny.alpha = Math.max(0.1, cos);
+            childAny.alpha = reelAlphaFade ? Math.max(0.1, cos) : 1.0;
         }
     });
 
