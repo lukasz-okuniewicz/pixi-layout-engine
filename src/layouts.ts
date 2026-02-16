@@ -3063,6 +3063,7 @@ const _layoutReelSpinner = (components: LayoutComponent[], options: LayoutOption
         radius = 250,
         itemAngleStep = 30,
         depthScale = 0.5,
+        stretchStrength = 0,
         vertical = true,
         width = 200,
         height = 400
@@ -3070,10 +3071,22 @@ const _layoutReelSpinner = (components: LayoutComponent[], options: LayoutOption
 
     if (components.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
 
+    const stableComponents = [...components].sort((a: any, b: any) =>
+        (a.layoutId || 0) - (b.layoutId || 0)
+    );
+
+    let sX = 0, sY = 0;
+    if (typeof stretchStrength === 'number') {
+        sX = vertical ? stretchStrength * 0.3 : stretchStrength;
+        sY = vertical ? stretchStrength : stretchStrength * 0.3;
+    } else if (typeof stretchStrength === 'object' && stretchStrength !== null) {
+        sX = stretchStrength.x ?? 0;
+        sY = stretchStrength.y ?? 0;
+    }
+
     const toRad = (deg: number) => deg * (Math.PI / 180);
     const spinRad = toRad(spinDegrees);
     const stepRad = toRad(itemAngleStep);
-    const stableComponents = [...components].sort((a: any, b: any) => (a.layoutId || 0) - (b.layoutId || 0));
 
     stableComponents.forEach((child, i) => {
         const angle = (i * stepRad) + spinRad;
@@ -3081,34 +3094,40 @@ const _layoutReelSpinner = (components: LayoutComponent[], options: LayoutOption
         const sin = Math.sin(angle);
 
         const offset = sin * radius;
-        if (vertical) {
-            child.position.set(0, offset);
-        } else {
-            child.position.set(offset, 0);
-        }
+        child.position.set(vertical ? 0 : offset, vertical ? offset : 0);
 
         const isVisible = cos > 0;
-        if ((child as any).scale) {
-            if (!isVisible) {
-                (child as any).scale.set(0);
-                (child as any).visible = false;
-            } else {
-                (child as any).visible = true;
-                const s = 1 - (1 - cos) * depthScale;
-                (child as any).scale.set(s);
-            }
+        const childAny = child as any;
+
+        if (childAny.visible !== undefined) childAny.visible = isVisible;
+
+        if (!isVisible) {
+            if (childAny.scale?.set) childAny.scale.set(0);
+            return;
         }
-        if ((child as any).zIndex !== undefined) {
-            (child as any).zIndex = Math.floor(cos * 1000);
+
+        if (childAny.scale?.set) {
+            const perspectiveScale = 1 - (1 - cos) * depthScale;
+            const faceRatio = Math.abs(cos);
+            const stretchX = (1 - sX) + (sX * faceRatio);
+            const stretchY = (1 - sY) + (sY * faceRatio);
+
+            childAny.scale.set(
+                perspectiveScale * stretchX,
+                perspectiveScale * stretchY
+            );
+        }
+
+        if (childAny.zIndex !== undefined) {
+            childAny.zIndex = Math.floor(cos * 1000);
+        }
+
+        if (childAny.alpha !== undefined) {
+            childAny.alpha = Math.max(0.1, cos);
         }
     });
 
-    return {
-        minX: -width / 2,
-        maxX: width / 2,
-        minY: -height / 2,
-        maxY: height / 2
-    };
+    return { minX: -width / 2, maxX: width / 2, minY: -height / 2, maxY: height / 2 };
 };
 
 const _layoutConcentricRings = (components: LayoutComponent[], options: LayoutOptions = {}): Bounds => {
