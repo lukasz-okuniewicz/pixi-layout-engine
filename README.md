@@ -1665,4 +1665,4 @@ This project is licensed under the GNU General Public License v2.0.
 
 ---
 
-For more examples and live demos, visit the [Live Editor](https://lukasz-okuniewicz.github.io/pixi-layout-engine-ui/).
+For more examples and live demos, visit the [Live Editor](https://layout.okuniewicz.eu/).
