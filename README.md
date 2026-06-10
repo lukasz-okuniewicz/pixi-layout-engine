@@ -14,7 +14,7 @@ If you find **pixi-layout-engine** useful and would like to support my work, you
 ---
 
 ## 🎮 Demo
-Try it out here: [pixi-layout-engine Live Editor](https://lukasz-okuniewicz.github.io/pixi-layout-engine-ui/)
+Try it out here: [pixi-layout-engine Live Editor](https://layout.okuniewicz.eu/)
 
 The live editor allows you to experiment with all layouts in real-time, adjust parameters, and see immediate visual feedback.
 
